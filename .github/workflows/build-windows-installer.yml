@@ -7,6 +7,9 @@ on:
       - 'build/windows-installer'
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - 'main'
 
 permissions:
   contents: read
