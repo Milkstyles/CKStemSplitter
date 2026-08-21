@@ -96,7 +96,7 @@ juce::File StemEngine::getModelCacheDirectory() const
 juce::File StemEngine::getCacheDirectoryForSource(const juce::File& source) const
 {
     const auto keyText = source.getFullPathName() + "|" + juce::String(source.getSize()) + "|" + juce::String(source.getLastModificationTime().toMilliseconds());
-    const auto key = juce::MD5(keyText.toRawUTF8(), static_cast<size_t>(keyText.getNumBytesAsUTF8())).toHexString();
+    const auto key = juce::String::toHexString(keyText.hashCode64());
 
     return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
         .getChildFile("Commercial Kings")
@@ -197,7 +197,7 @@ void StemEngine::separationWorker()
         auto lines = juce::StringArray::fromLines(pending);
         if (!pending.endsWithChar('\n') && lines.size() > 0)
         {
-            pending = lines.getLast();
+            pending = lines[lines.size() - 1];
             lines.remove(lines.size() - 1);
         }
         else
