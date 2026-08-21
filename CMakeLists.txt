@@ -28,6 +28,8 @@ juce_add_plugin(CKStemSplitter
     PLUGIN_NAME "CK Stem Splitter"
 )
 
+juce_generate_juce_header(CKStemSplitter)
+
 target_sources(CKStemSplitter PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
