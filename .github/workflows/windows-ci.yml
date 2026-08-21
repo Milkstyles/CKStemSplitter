@@ -1,0 +1,35 @@
+name: CK Stem Splitter Windows CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-ci:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Windows runner
+        shell: pwsh
+        run: |
+          Write-Host "CK Stem Splitter Windows CI is running"
+          cmake --version
+          python --version
+
+      - name: Configure VST3
+        shell: pwsh
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build VST3
+        shell: pwsh
+        run: cmake --build build --config Release --target CKStemSplitter_VST3 --parallel
