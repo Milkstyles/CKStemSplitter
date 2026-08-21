@@ -8,3 +8,4 @@ Actions-permissions trigger: 2026-08-21.
 Workflow-rediscovery trigger: 2026-08-21 14:52 ET.
 VS2026 workflow trigger: 2026-08-21 17:07 ET.
 JuceHeader fix validation trigger: 2026-08-21 19:00 ET.
+JUCE 8 StemEngine fixes validation trigger: 2026-08-21 19:58 ET.
