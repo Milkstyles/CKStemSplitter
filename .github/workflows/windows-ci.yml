@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   windows-ci:
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 30
 
     steps:
@@ -25,10 +25,11 @@ jobs:
           Write-Host "CK Stem Splitter Windows CI is running"
           cmake --version
           python --version
+          Get-ChildItem 'C:\Program Files\Microsoft Visual Studio' -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
 
       - name: Configure VST3
         shell: pwsh
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 
       - name: Build VST3
         shell: pwsh
