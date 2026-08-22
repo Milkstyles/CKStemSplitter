@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [main, build/full-windows-installer]
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ permissions:
 jobs:
   windows-ci:
     runs-on: windows-2025
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -34,3 +34,141 @@ jobs:
       - name: Build VST3
         shell: pwsh
         run: cmake --build build --config Release --target CKStemSplitter_VST3 --parallel
+
+      - name: Stage VST3
+        shell: pwsh
+        run: |
+          $src = Join-Path $PWD "build\CKStemSplitter_artefacts\Release\VST3\CK Stem Splitter.vst3"
+          if (!(Test-Path $src)) {
+            Get-ChildItem -Path build -Recurse -Filter "*.vst3" | ForEach-Object { Write-Host $_.FullName }
+            throw "VST3 build output was not found."
+          }
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
+          Copy-Item -Path $src -Destination staging -Recurse -Force
+
+      - name: Install engine build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "demucs-onnx[mp3]==0.3.0" "pyinstaller>=6.10,<7"
+
+      - name: Prewarm bundled vocal model
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging\engine\models | Out-Null
+          python -m demucs_onnx.cli prewarm `
+            --models htdemucs_ft_vocals `
+            --precision fp16weights `
+            --providers cpu `
+            --cache-dir "$PWD\staging\engine\models"
+
+          $modelBytes = (Get-ChildItem staging\engine\models -Recurse -File | Measure-Object Length -Sum).Sum
+          Write-Host "Bundled model bytes: $modelBytes"
+          if ($modelBytes -lt 100MB) { throw "Bundled model cache is unexpectedly small." }
+
+      - name: Freeze self-contained AI engine
+        shell: pwsh
+        run: |
+          python -m PyInstaller `
+            --clean `
+            --noconfirm `
+            --onedir `
+            --name ckstem-engine `
+            --distpath staging\engine `
+            --workpath build\pyinstaller `
+            --specpath build\pyinstaller `
+            --collect-all demucs_onnx `
+            --collect-all onnxruntime `
+            --collect-all soundfile `
+            --collect-all soxr `
+            --collect-all huggingface_hub `
+            engine\ckstem_engine.py
+
+          $engineExe = "staging\engine\ckstem-engine\ckstem-engine.exe"
+          if (!(Test-Path $engineExe)) { throw "Frozen CK stem engine was not created." }
+          & $engineExe --help
+          & $engineExe list-models
+
+      - name: Create smoke-test audio
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build\smoke-in | Out-Null
+          @'
+          import math
+          import wave
+          from pathlib import Path
+
+          sample_rate = 44100
+          seconds = 3
+          output = Path(r"build/smoke-in/test.wav")
+          with wave.open(str(output), "wb") as wav:
+              wav.setnchannels(2)
+              wav.setsampwidth(2)
+              wav.setframerate(sample_rate)
+              frames = bytearray()
+              for i in range(sample_rate * seconds):
+                  t = i / sample_rate
+                  sample = int(0.22 * 32767 * (math.sin(2 * math.pi * 220 * t) + 0.4 * math.sin(2 * math.pi * 880 * t)) / 1.4)
+                  b = int(sample).to_bytes(2, "little", signed=True)
+                  frames.extend(b)
+                  frames.extend(b)
+              wav.writeframes(frames)
+          print(output.resolve())
+          '@ | python -
+
+      - name: Smoke test real stem separation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build\smoke-out | Out-Null
+          & staging\engine\ckstem-engine\ckstem-engine.exe separate `
+            build\smoke-in\test.wav `
+            build\smoke-out `
+            --model htdemucs_ft_vocals `
+            --small `
+            --providers cpu `
+            --cache-dir "$PWD\staging\engine\models" `
+            --karaoke `
+            --quiet
+
+          Write-Host "Smoke-test outputs:"
+          Get-ChildItem build\smoke-out -Recurse -File | ForEach-Object { Write-Host "$($_.FullName) $($_.Length) bytes" }
+
+          $vocals = Get-ChildItem build\smoke-out -Recurse -Filter vocals.wav | Select-Object -First 1
+          $karaoke = Get-ChildItem build\smoke-out -Recurse -Filter karaoke.wav | Select-Object -First 1
+          if ($null -eq $vocals) { throw "Smoke test did not create vocals.wav." }
+          if ($null -eq $karaoke) { throw "Smoke test did not create karaoke.wav." }
+          if ($vocals.Length -lt 1000 -or $karaoke.Length -lt 1000) { throw "Smoke-test stems are unexpectedly small." }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { throw "Inno Setup compiler was not found at $iscc" }
+          & $iscc installer\CKStemSplitter.iss
+
+          $installer = "dist\CK-Stem-Splitter-Setup.exe"
+          if (!(Test-Path $installer)) { throw "Windows installer was not created." }
+          $installerBytes = (Get-Item $installer).Length
+          Write-Host "Installer bytes: $installerBytes"
+          if ($installerBytes -lt 100MB) { throw "Installer is unexpectedly small; bundled model/engine may be missing." }
+
+      - name: Generate SHA-256
+        shell: pwsh
+        run: |
+          $hash = Get-FileHash dist\CK-Stem-Splitter-Setup.exe -Algorithm SHA256
+          "$($hash.Hash)  CK-Stem-Splitter-Setup.exe" | Set-Content dist\CK-Stem-Splitter-Setup.exe.sha256
+          Get-Content dist\CK-Stem-Splitter-Setup.exe.sha256
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CK-Stem-Splitter-Windows-Installer
+          path: |
+            dist/CK-Stem-Splitter-Setup.exe
+            dist/CK-Stem-Splitter-Setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
