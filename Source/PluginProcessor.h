@@ -35,11 +35,14 @@ public:
     StemEngine& getStemEngine() noexcept { return stemEngine; }
 
     bool startSelectionCapture();
+    bool startAutomatedWorkflow(int modeIndex);
     void stopSelectionCaptureAndSplit();
     bool isCapturingSelection() const noexcept { return capturingSelection.load(); }
     juce::int64 getCapturedSamples() const noexcept { return capturedSamples.load(); }
     juce::String getCaptureStatus() const;
     void restoreLastScanFromUi();
+    void checkAutomationRequestFromUi();
+    void publishAutomationReadyFromUi();
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -61,9 +64,12 @@ private:
     double captureSampleRate = 44100.0;
     int captureChannels = 2;
     bool restoredLastScan = false;
+    bool automatedCapture = false;
+    bool automationRequestChecked = false;
+    juce::String automationRequestId;
 
     mutable juce::CriticalSection captureStatusLock;
-    juce::String captureStatus { "Highlight audio, click SCAN SELECTION, then click Audition Apply" };
+    juce::String captureStatus { "Highlight audio, then choose Make Acapella or Make Instrumental" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CKStemSplitterAudioProcessor)
 };

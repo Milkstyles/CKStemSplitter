@@ -1,5 +1,5 @@
 #define MyAppName "CK Stem Splitter"
-#define MyAppVersion "0.9.2"
+#define MyAppVersion "1.0.0"
 #define MyAppPublisher "Commercial Kings"
 #define MyAppURL "https://commercialkings.com"
 
@@ -28,9 +28,11 @@ SetupLogging=yes
 Source: "..\staging\CK Stem Splitter.vst3\*"; DestDir: "{app}\CK Stem Splitter.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\engine\ckstem-engine\*"; DestDir: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine\ckstem-engine"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\engine\models\*"; DestDir: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine\models"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\staging\companion\CKStemBridge.exe"; DestDir: "{commonappdata}\Commercial Kings\CK Stem Splitter\companion"; Flags: ignoreversion
 
 [Dirs]
 Name: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine"
+Name: "{commonappdata}\Commercial Kings\CK Stem Splitter\companion"
 
 [InstallDelete]
 ; Remove the discontinued CEP export panel so Audition shows one CK interface.

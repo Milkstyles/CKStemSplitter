@@ -35,6 +35,15 @@ jobs:
         shell: pwsh
         run: cmake --build build --config Release --target CKStemSplitter_VST3 --parallel
 
+      - name: Build Audition automation companion
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --target CKStemBridge --parallel
+          New-Item -ItemType Directory -Force -Path staging\companion | Out-Null
+          $bridge = Get-ChildItem -Path build -Recurse -Filter "CKStemBridge.exe" | Select-Object -First 1 -ExpandProperty FullName
+          if (!(Test-Path $bridge)) { throw "Audition automation companion was not built." }
+          Copy-Item $bridge staging\companion\CKStemBridge.exe -Force
+
       - name: Stage and verify Audition offline effect
         shell: pwsh
         run: |
@@ -49,8 +58,8 @@ jobs:
           if (!(Select-String -Path Source\PluginProcessor.cpp -Pattern "lastCaptureActivityTicks" -Quiet)) {
             throw "VST3 is missing automatic offline scan completion."
           }
-          if (!(Select-String -Path Source\PluginEditor.cpp -Pattern "SCAN SELECTION" -Quiet)) {
-            throw "VST3 is missing the offline scan UI."
+          if (!(Select-String -Path Source\PluginEditor.cpp -Pattern "MAKE ACAPELLA" -Quiet)) {
+            throw "VST3 is missing the one-click stem workflow UI."
           }
           if (!(Select-String -Path Source\PluginProcessor.cpp -Pattern "restoreLastScanState" -Quiet)) {
             throw "VST3 is missing cross-Apply stem cache restoration."

@@ -15,7 +15,7 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     subtitleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(subtitleLabel);
 
-    instructionLabel.setText("1. SCAN + Apply   2. Reopen + CONTINUE   3. Choose stem + Apply",
+    instructionLabel.setText("Highlight audio, choose a stem, and wait - no playback or file dialogs",
                              juce::dontSendNotification);
     instructionLabel.setFont(juce::Font(12.0f));
     instructionLabel.setJustificationType(juce::Justification::centred);
@@ -24,21 +24,15 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
 
     captureButton.onClick = [this]
     {
-        processor.startSelectionCapture();
+        processor.startAutomatedWorkflow(1);
     };
     addAndMakeVisible(captureButton);
 
     stopSplitButton.onClick = [this]
     {
-        processor.stopSelectionCaptureAndSplit();
+        processor.startAutomatedWorkflow(2);
     };
     addAndMakeVisible(stopSplitButton);
-
-    continueButton.onClick = [this]
-    {
-        processor.restoreLastScanFromUi();
-    };
-    addAndMakeVisible(continueButton);
 
     modeBox.addItem("Original", 1);
     modeBox.addItem("Acapella", 2);
@@ -95,19 +89,23 @@ void CKStemSplitterAudioProcessorEditor::resized()
     captureButton.setBounds(55, 158, 240, 40);
     stopSplitButton.setBounds(325, 158, 240, 40);
 
-    continueButton.setBounds(55, 215, 510, 36);
+    modeBox.setBounds(55, 225, 300, 38);
 
-    modeBox.setBounds(55, 265, 300, 38);
+    outputGainLabel.setBounds(425, 212, 120, 22);
+    outputGainSlider.setBounds(430, 235, 110, 105);
 
-    outputGainLabel.setBounds(425, 252, 120, 22);
-    outputGainSlider.setBounds(430, 275, 110, 85);
-
-    progressBar.setBounds(55, 325, 300, 22);
-    statusLabel.setBounds(45, 365, 530, 42);
+    progressBar.setBounds(55, 295, 300, 22);
+    statusLabel.setBounds(45, 342, 530, 42);
 }
 
 void CKStemSplitterAudioProcessorEditor::timerCallback()
 {
+    if (!checkedAutomationRequest)
+    {
+        checkedAutomationRequest = true;
+        processor.checkAutomationRequestFromUi();
+    }
+
     auto& engine = processor.getStemEngine();
     progressValue = engine.getProgress();
 
@@ -120,21 +118,13 @@ void CKStemSplitterAudioProcessorEditor::timerCallback()
         statusLabel.setText(processor.getCaptureStatus(), juce::dontSendNotification);
 
     captureButton.setEnabled(!busy && !capturing);
-    stopSplitButton.setEnabled(capturing);
-    continueButton.setEnabled(!busy && !capturing && !engine.hasSeparatedStems());
+    stopSplitButton.setEnabled(!busy && !capturing);
     modeBox.setEnabled(!busy);
 
-    if (capturing)
-    {
-        const auto seconds = processor.getCapturedSamples() / 44100.0;
-        captureButton.setButtonText(seconds > 0.0
-            ? "SCANNED " + juce::String(seconds, 1) + "s"
-            : "SCAN ARMED - CLICK AUDITION APPLY");
-    }
-    else
-    {
-        captureButton.setButtonText("SCAN SELECTION");
-    }
+    captureButton.setButtonText(capturing ? "WORKING..." : "MAKE ACAPELLA");
+    stopSplitButton.setButtonText(capturing ? "WORKING..." : "MAKE INSTRUMENTAL");
+
+    processor.publishAutomationReadyFromUi();
 
     repaint();
 }

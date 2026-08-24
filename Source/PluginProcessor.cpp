@@ -10,6 +10,11 @@ juce::File getLastScanStateFile()
         .getChildFile("CK Stem Splitter")
         .getChildFile("last-scan.txt");
 }
+
+juce::File getAutomationFile(const juce::String& name)
+{
+    return getLastScanStateFile().getSiblingFile(name);
+}
 }
 
 CKStemSplitterAudioProcessor::CKStemSplitterAudioProcessor()
@@ -168,6 +173,44 @@ bool CKStemSplitterAudioProcessor::startSelectionCapture()
     return true;
 }
 
+bool CKStemSplitterAudioProcessor::startAutomatedWorkflow(int modeIndex)
+{
+    if (modeIndex != 1 && modeIndex != 2)
+        return false;
+
+    if (!startSelectionCapture())
+        return false;
+
+    automatedCapture = true;
+    const auto requestId = juce::String(juce::Time::currentTimeMillis());
+    const auto companion = juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
+        .getChildFile("Commercial Kings")
+        .getChildFile("CK Stem Splitter")
+        .getChildFile("companion")
+        .getChildFile("CKStemBridge.exe");
+
+    if (!companion.existsAsFile())
+    {
+        automatedCapture = false;
+        capturingSelection.store(false);
+        setCaptureStatus("Automation companion is missing - reinstall CK Stem Splitter");
+        return false;
+    }
+
+    const auto mode = modeIndex == 1 ? "acapella" : "instrumental";
+    if (!juce::Process::openDocument(companion.getFullPathName(),
+                                     "orchestrate " + mode + " " + requestId))
+    {
+        automatedCapture = false;
+        capturingSelection.store(false);
+        setCaptureStatus("Could not start the Audition automation companion");
+        return false;
+    }
+
+    setCaptureStatus("Working offline - keep Audition open; no playback is required");
+    return true;
+}
+
 void CKStemSplitterAudioProcessor::stopSelectionCaptureAndSplit()
 {
     if (!capturingSelection.exchange(false))
@@ -189,6 +232,12 @@ void CKStemSplitterAudioProcessor::stopSelectionCaptureAndSplit()
     stemEngine.setTimelineOffsetSamples(startSample);
     stemEngine.setSourceFile(capturedSelectionFile);
     saveLastScanState(startSample);
+    if (automatedCapture)
+    {
+        automatedCapture = false;
+        setCaptureStatus("Selection scanned - companion is continuing automatically...");
+        return;
+    }
     setCaptureStatus("Selection scanned - starting AI separation...");
     stemEngine.startSeparation();
 }
@@ -235,6 +284,40 @@ void CKStemSplitterAudioProcessor::restoreLastScanFromUi()
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     if (!restoredLastScan)
         restoreLastScanState();
+}
+
+void CKStemSplitterAudioProcessor::checkAutomationRequestFromUi()
+{
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    if (automationRequestChecked)
+        return;
+    automationRequestChecked = true;
+
+    const auto requestFile = getAutomationFile("automation-process.txt");
+    if (!requestFile.existsAsFile())
+        return;
+
+    const auto lines = juce::StringArray::fromLines(requestFile.loadFileAsString());
+    requestFile.deleteFile();
+    if (lines.size() < 2)
+        return;
+
+    automationRequestId = lines[0].trim();
+    const auto requestedMode = lines[1].trim().equalsIgnoreCase("instrumental") ? 2 : 1;
+    if (auto* mode = apvts.getParameter("mode"))
+        mode->setValueNotifyingHost(requestedMode == 1 ? 0.5f : 1.0f);
+    restoreLastScanFromUi();
+}
+
+void CKStemSplitterAudioProcessor::publishAutomationReadyFromUi()
+{
+    if (automationRequestId.isEmpty() || !stemEngine.hasSeparatedStems())
+        return;
+
+    const auto readyFile = getAutomationFile("automation-ready.txt");
+    readyFile.getParentDirectory().createDirectory();
+    readyFile.replaceWithText(automationRequestId);
+    automationRequestId.clear();
 }
 
 void CKStemSplitterAudioProcessor::setCaptureStatus(const juce::String& newStatus)

@@ -1,19 +1,18 @@
-# CK Stem Splitter v0.9.2
+# CK Stem Splitter v1.0
 
-Self-contained Adobe Audition VST3 for playback-free vocal/instrumental separation of the highlighted waveform selection.
+Self-contained Adobe Audition VST3 plus Windows companion for one-click, playback-free vocal/instrumental separation of the highlighted waveform selection.
 
 ## Audition workflow
 
 1. Highlight a range in Audition's Waveform Editor.
 2. Open **Effects > VST3 > Commercial Kings > CK Stem Splitter**.
-3. Click **Scan Selection**, then click Audition's **Apply** once. Audition renders the highlighted range through the effect offline; CK captures it while passing the original through unchanged. Playback is not required.
-4. Wait for **Stems ready**, then choose **Acapella** or **Instrumental**.
-5. Keep the same range highlighted and click Audition's **Apply** again. The selected stem replaces that range in the current file.
-6. Use Audition Undo to restore the original if needed.
+3. Click **Make Acapella** or **Make Instrumental** once.
+4. Keep Audition open while the companion scans and separates the highlighted range offline. It automatically runs both Apply passes and replaces that range in the current file.
+5. Use Audition Undo to restore the original if needed.
 
-The two Apply passes are required because the full selection must be scanned before the AI model can calculate a stem. The temporary capture and stem cache are private implementation details; there is no Save window, file browser, manually opened file, upload, Python installation, or model download.
+The companion handles the two internal Apply passes because the full selection must be scanned before the AI model can calculate a stem. The temporary capture and stem cache are private implementation details; there is no playback, Save window, file browser, manually opened file, upload, Python installation, or model download.
 
-## v0.9 changes
+## v1.0 changes
 
 - Restores the Effects-panel VST3 based on the working capture/apply build.
 - Automatically finishes capture when Audition's offline Apply pass becomes idle or releases the effect.
@@ -22,12 +21,13 @@ The two Apply passes are required because the full selection must be scanned bef
 - Renames Vocals to Acapella and preserves Instrumental as the second choice.
 - Removes the discontinued CEP selection-export panel during installation.
 - Bundles the existing `htdemucs_ft_vocals` FP16 model and frozen local engine.
-- v0.9.2 removes all automatic startup restoration and processor timers. Reopen the effect and click **Continue Last Scan** after the first Apply; no playback or file browsing is required.
+- v1.0 adds a Windows companion that automatically drives Audition's two required offline passes. Highlight audio, open the effect, and click **Make Acapella** or **Make Instrumental** once.
 
 ## Installed locations
 
 - VST3: `C:\Program Files\Common Files\VST3\CK Stem Splitter.vst3`
 - Engine/model: `C:\ProgramData\Commercial Kings\CK Stem Splitter\engine\`
+- Automation companion: `C:\ProgramData\Commercial Kings\CK Stem Splitter\companion\`
 - Private capture/cache: `%TEMP%\Commercial Kings\CK Stem Splitter\` and `%APPDATA%\Commercial Kings\CK Stem Splitter\Cache\`
 
 ## Automated Windows build

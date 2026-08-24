@@ -20,15 +20,15 @@ private:
     juce::Label titleLabel;
     juce::Label subtitleLabel;
     juce::Label instructionLabel;
-    juce::TextButton captureButton { "SCAN SELECTION" };
-    juce::TextButton stopSplitButton { "FINISH SCAN" };
-    juce::TextButton continueButton { "CONTINUE LAST SCAN" };
+    juce::TextButton captureButton { "MAKE ACAPELLA" };
+    juce::TextButton stopSplitButton { "MAKE INSTRUMENTAL" };
     juce::ComboBox modeBox;
     juce::Slider outputGainSlider;
     juce::Label outputGainLabel;
     juce::ProgressBar progressBar;
     double progressValue = 0.0;
     juce::Label statusLabel;
+    bool checkedAutomationRequest = false;
 
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
