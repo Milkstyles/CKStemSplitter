@@ -17,6 +17,7 @@ The two Apply passes are required because the full selection must be scanned bef
 
 - Restores the Effects-panel VST3 based on the working capture/apply build.
 - Automatically finishes capture when Audition's offline Apply pass becomes idle or releases the effect.
+- Restores the completed scan when Audition recreates the effect between Apply passes.
 - Keeps the first pass transparent so it does not alter the current waveform.
 - Renames Vocals to Acapella and preserves Instrumental as the second choice.
 - Removes the discontinued CEP selection-export panel during installation.

@@ -1,6 +1,17 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+namespace
+{
+juce::File getLastScanStateFile()
+{
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("Commercial Kings")
+        .getChildFile("CK Stem Splitter")
+        .getChildFile("last-scan.txt");
+}
+}
+
 CKStemSplitterAudioProcessor::CKStemSplitterAudioProcessor()
     : AudioProcessor(BusesProperties()
         .withInput("Input", juce::AudioChannelSet::stereo(), true)
@@ -45,6 +56,8 @@ void CKStemSplitterAudioProcessor::prepareToPlay(double sampleRate, int samplesP
     captureSampleRate = sampleRate;
     captureChannels = juce::jmax(1, getTotalNumInputChannels());
     stemEngine.prepare(sampleRate, samplesPerBlock, getTotalNumOutputChannels());
+    if (!restoredLastScan)
+        restoreLastScanState();
 }
 
 void CKStemSplitterAudioProcessor::releaseResources()
@@ -194,7 +207,45 @@ void CKStemSplitterAudioProcessor::stopSelectionCaptureAndSplit()
     const auto startSample = juce::jmax<juce::int64>(0, captureStartHostSample.load());
     stemEngine.setTimelineOffsetSamples(startSample);
     stemEngine.setSourceFile(capturedSelectionFile);
+    saveLastScanState(startSample);
     setCaptureStatus("Selection scanned - starting AI separation...");
+    stemEngine.startSeparation();
+}
+
+void CKStemSplitterAudioProcessor::saveLastScanState(juce::int64 timelineOffset)
+{
+    auto stateFile = getLastScanStateFile();
+    stateFile.getParentDirectory().createDirectory();
+    stateFile.replaceWithText(capturedSelectionFile.getFullPathName()
+                              + "\n" + juce::String(timelineOffset));
+}
+
+void CKStemSplitterAudioProcessor::restoreLastScanState()
+{
+    restoredLastScan = true;
+    const auto stateFile = getLastScanStateFile();
+    if (!stateFile.existsAsFile())
+        return;
+
+    const auto lines = juce::StringArray::fromLines(stateFile.loadFileAsString());
+    if (lines.isEmpty())
+        return;
+
+    const juce::File scanFile(lines[0].trim());
+    if (!scanFile.existsAsFile())
+        return;
+
+    constexpr juce::int64 maximumAgeMs = 24LL * 60LL * 60LL * 1000LL;
+    const auto ageMs = juce::Time::currentTimeMillis()
+        - scanFile.getLastModificationTime().toMilliseconds();
+    if (ageMs < 0 || ageMs > maximumAgeMs)
+        return;
+
+    const auto timelineOffset = lines.size() > 1 ? lines[1].getLargeIntValue() : 0;
+    capturedSelectionFile = scanFile;
+    stemEngine.setTimelineOffsetSamples(juce::jmax<juce::int64>(0, timelineOffset));
+    stemEngine.setSourceFile(scanFile);
+    setCaptureStatus("Restoring the completed selection scan...");
     stemEngine.startSeparation();
 }
 

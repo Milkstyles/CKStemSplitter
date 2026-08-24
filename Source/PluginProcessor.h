@@ -46,6 +46,8 @@ public:
 private:
     void timerCallback() override;
     void setCaptureStatus(const juce::String& newStatus);
+    void saveLastScanState(juce::int64 timelineOffset);
+    void restoreLastScanState();
 
     juce::AudioProcessorValueTreeState apvts;
     StemEngine stemEngine;
@@ -59,6 +61,7 @@ private:
     std::atomic<juce::int64> lastCaptureActivityTicks { 0 };
     double captureSampleRate = 44100.0;
     int captureChannels = 2;
+    bool restoredLastScan = false;
 
     mutable juce::CriticalSection captureStatusLock;
     juce::String captureStatus { "Highlight audio, click SCAN SELECTION, then click Audition Apply" };

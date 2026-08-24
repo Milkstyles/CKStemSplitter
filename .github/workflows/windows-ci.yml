@@ -52,6 +52,9 @@ jobs:
           if (!(Select-String -Path Source\PluginEditor.cpp -Pattern "SCAN SELECTION" -Quiet)) {
             throw "VST3 is missing the offline scan UI."
           }
+          if (!(Select-String -Path Source\PluginProcessor.cpp -Pattern "restoreLastScanState" -Quiet)) {
+            throw "VST3 is missing cross-Apply stem cache restoration."
+          }
 
       - name: Install engine build dependencies
         shell: pwsh
