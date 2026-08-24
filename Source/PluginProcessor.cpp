@@ -197,9 +197,10 @@ bool CKStemSplitterAudioProcessor::startAutomatedWorkflow(int modeIndex)
         return false;
     }
 
-    const auto mode = modeIndex == 1 ? "acapella" : "instrumental";
+    const juce::String mode = modeIndex == 1 ? "acapella" : "instrumental";
+    const juce::String parameters = "orchestrate " + mode + " " + requestId;
     if (!juce::Process::openDocument(companion.getFullPathName(),
-                                     "orchestrate " + mode + " " + requestId))
+                                     parameters))
     {
         automatedCapture = false;
         capturingSelection.store(false);
