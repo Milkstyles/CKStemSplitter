@@ -14,23 +14,20 @@ public:
 
 private:
     void timerCallback() override;
-    void chooseAudioFile();
 
     CKStemSplitterAudioProcessor& processor;
 
     juce::Label titleLabel;
     juce::Label subtitleLabel;
-    juce::TextButton loadButton { "LOAD AUDIO" };
-    juce::Label fileLabel;
+    juce::Label instructionLabel;
+    juce::TextButton captureButton { "CAPTURE SELECTION" };
+    juce::TextButton stopSplitButton { "STOP & SPLIT" };
     juce::ComboBox modeBox;
     juce::Slider outputGainSlider;
     juce::Label outputGainLabel;
-    juce::TextButton analyzeButton { "SPLIT STEMS" };
     juce::ProgressBar progressBar;
     double progressValue = 0.0;
     juce::Label statusLabel;
-
-    std::unique_ptr<juce::FileChooser> fileChooser;
 
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
