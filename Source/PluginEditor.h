@@ -20,7 +20,7 @@ private:
     juce::Label titleLabel;
     juce::Label subtitleLabel;
     juce::Label instructionLabel;
-    juce::TextButton captureButton { "CAPTURE SELECTION" };
+    juce::TextButton captureButton { "LEGACY REAL-TIME CAPTURE" };
     juce::TextButton stopSplitButton { "STOP & SPLIT" };
     juce::ComboBox modeBox;
     juce::Slider outputGainSlider;

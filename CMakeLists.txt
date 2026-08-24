@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(CKStemSplitter VERSION 0.6.0)
+project(CKStemSplitter VERSION 0.7.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -54,3 +54,21 @@ target_link_libraries(CKStemSplitter
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+if(WIN32)
+    add_executable(CKStemBridge WIN32
+        Bridge/CKStemBridge.cpp
+    )
+
+    target_compile_definitions(CKStemBridge PRIVATE
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+    )
+
+    target_link_libraries(CKStemBridge PRIVATE
+        shell32
+        user32
+    )
+endif()

@@ -10,12 +10,12 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
 
-    subtitleLabel.setText("FAST VOCAL / INSTRUMENTAL SEPARATION", juce::dontSendNotification);
+    subtitleLabel.setText("VST3 PREVIEW / PLAYBACK MODE", juce::dontSendNotification);
     subtitleLabel.setFont(juce::Font(13.0f));
     subtitleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(subtitleLabel);
 
-    instructionLabel.setText("1. Highlight audio in Audition   2. Capture   3. Preview/Play selection   4. Stop & Split   5. Choose stem + Apply",
+    instructionLabel.setText("NO-PLAYBACK WORKFLOW:  Window > Extensions > CK Stem Splitter",
                              juce::dontSendNotification);
     instructionLabel.setFont(juce::Font(12.0f));
     instructionLabel.setJustificationType(juce::Justification::centred);
@@ -122,7 +122,7 @@ void CKStemSplitterAudioProcessorEditor::timerCallback()
     }
     else
     {
-        captureButton.setButtonText("CAPTURE SELECTION");
+        captureButton.setButtonText("LEGACY REAL-TIME CAPTURE");
     }
 
     repaint();

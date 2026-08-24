@@ -31,9 +31,9 @@ jobs:
         shell: pwsh
         run: cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 
-      - name: Build VST3
+      - name: Build VST3 and Audition bridge
         shell: pwsh
-        run: cmake --build build --config Release --target CKStemSplitter_VST3 --parallel
+        run: cmake --build build --config Release --target CKStemSplitter_VST3 CKStemBridge --parallel
 
       - name: Stage VST3
         shell: pwsh
@@ -45,6 +45,26 @@ jobs:
           }
           New-Item -ItemType Directory -Force -Path staging | Out-Null
           Copy-Item -Path $src -Destination staging -Recurse -Force
+
+      - name: Stage and verify Audition offline panel
+        shell: pwsh
+        run: |
+          $bridge = Join-Path $PWD "build\Release\CKStemBridge.exe"
+          if (!(Test-Path $bridge)) {
+            $bridge = Get-ChildItem -Path build -Recurse -Filter "CKStemBridge.exe" | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (!(Test-Path $bridge)) { throw "Audition clipboard bridge was not built." }
+
+          Copy-Item audition-extension staging\audition-extension -Recurse -Force
+          New-Item -ItemType Directory -Force -Path staging\bridge | Out-Null
+          Copy-Item $bridge staging\bridge\CKStemBridge.exe -Force
+
+          [xml]$manifest = Get-Content staging\audition-extension\CSXS\manifest.xml
+          $auditionHost = $manifest.ExtensionManifest.ExecutionEnvironment.HostList.Host
+          if ($auditionHost.Name -ne "AUDT") { throw "CEP panel does not target Adobe Audition." }
+          if (!(Select-String -Path staging\audition-extension\jsx\host.jsx -Pattern "app.invokeCommand" -Quiet)) {
+            throw "Audition panel is missing host command integration."
+          }
 
       - name: Install engine build dependencies
         shell: pwsh
@@ -115,6 +135,9 @@ jobs:
               wav.writeframes(frames)
           print(output.resolve())
           '@ | python -
+
+          & staging\bridge\CKStemBridge.exe verify build\smoke-in\test.wav
+          if ($LASTEXITCODE -ne 0) { throw "Clipboard bridge rejected the smoke-test WAV." }
 
       - name: Smoke test real stem separation
         shell: pwsh

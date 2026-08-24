@@ -64,7 +64,7 @@ private:
     std::atomic<float> progress { 0.0f };
     std::atomic<bool> shouldStop { false };
     std::thread workerThread;
-    juce::String status { "Capture an Audition selection to split" };
+    juce::String status { "Use the Audition Extension panel for playback-free splitting" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemEngine)
 };

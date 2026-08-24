@@ -59,7 +59,7 @@ private:
     int captureChannels = 2;
 
     mutable juce::CriticalSection captureStatusLock;
-    juce::String captureStatus { "Highlight audio, click CAPTURE SELECTION, then preview it in Audition" };
+    juce::String captureStatus { "For no-playback splitting, open Window > Extensions > CK Stem Splitter" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CKStemSplitterAudioProcessor)
 };

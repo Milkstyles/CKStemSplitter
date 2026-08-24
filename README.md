@@ -1,16 +1,27 @@
-# CK Stem Splitter v0.6
+# CK Stem Splitter v0.7
 
-Windows VST3 prototype for Adobe Audition that performs local vocal/instrumental separation.
+Self-contained Windows stem separator with an Adobe Audition offline-selection panel and a VST3 preview effect.
 
 ## User workflow
 
-1. Insert **CK Stem Splitter** as a VST3 effect in Adobe Audition.
-2. Click **Load Audio** and choose the song file.
-3. Click **Split Stems**. The full file is processed directly; the song does not need to play in real time first.
-4. Choose **Vocals** or **Instrumental** in the output selector.
-5. Previously generated stems are cached per source file.
+1. Open a file in Audition's **Waveform Editor** and highlight the range to process.
+2. Open **Window > Extensions > CK Stem Splitter**.
+3. Click **Split Highlighted Selection**. Audition copies the selected waveform to the local companion through the Windows audio clipboard; there is no playback and no file picker.
+4. Choose **Vocals** or **Instrumental**.
+5. Click **Replace Selection**. The panel asks Audition to paste the selected stem over the still-highlighted range.
+6. Use Audition **Undo** if you want the original audio back.
 
-## v0.6 changes
+The VST3 is still installed for real-time preview/playback, but it is not the primary Audition selection workflow.
+
+## v0.7 changes
+
+- Adds an Audition CEP panel driven by Audition's reflected `Application.COMMAND_*` API and `app.invokeCommand`.
+- Copies and pastes highlighted waveform audio through a small native `CF_WAVE` bridge, avoiding playback and manual file browsing.
+- Runs the existing bundled `ckstem-engine.exe` offline and keeps all audio/model processing local.
+- Presents direct Vocals/Instrumental selection and destructive replace, with Audition Undo as the safety path.
+- Keeps the existing VST3 installed for playback/preview compatibility.
+
+## Existing engine and VST3 features
 
 - Uses the `htdemucs_ft_vocals` FP16 vocal-specialist ONNX model.
 - Bundles the AI model and frozen engine into the Windows installer; no Python or model download is required on the user's PC.
@@ -36,9 +47,13 @@ Per-user stem cache:
 
 `%APPDATA%\Commercial Kings\CK Stem Splitter\Cache\`
 
+Audition panel:
+
+`C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\com.commercialkings.ckstemsplitter\`
+
 ## Automated Windows build
 
-The GitHub Actions workflow `.github/workflows/build-windows-installer.yml` builds the x64 VST3, freezes the private separation engine, prewarms the bundled model, runs a real WAV separation smoke test, packages everything with Inno Setup, checks installer size, and uploads:
+The GitHub Actions workflow `.github/workflows/windows-ci.yml` builds the x64 VST3 and native Audition bridge, validates the panel manifest and bridge against a real WAV, freezes the private separation engine, prewarms the bundled model, runs a real stem-separation smoke test, packages everything with Inno Setup, checks installer size, and uploads:
 
 - `CK-Stem-Splitter-Setup.exe`
 - `CK-Stem-Splitter-Setup.exe.sha256`
