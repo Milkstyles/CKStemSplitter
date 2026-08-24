@@ -207,9 +207,11 @@ std::vector<std::wstring> splitLines(const std::wstring& text)
 bool runStemEngine(const std::filesystem::path& source,
                    const std::filesystem::path& outputDirectory)
 {
-    const wchar_t* programData = _wgetenv(L"PROGRAMDATA");
-    if (programData == nullptr) return false;
-    const auto root = std::filesystem::path(programData) / L"Commercial Kings" / L"CK Stem Splitter";
+    std::vector<wchar_t> modulePath(32768);
+    const auto moduleLength = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+    if (moduleLength == 0 || moduleLength >= modulePath.size()) return false;
+    const auto root = std::filesystem::path(std::wstring(modulePath.data(), moduleLength))
+        .parent_path().parent_path();
     const auto engine = root / L"engine" / L"ckstem-engine" / L"ckstem-engine.exe";
     const auto models = root / L"engine" / L"models";
     if (!std::filesystem::is_regular_file(engine)) return false;
@@ -234,6 +236,19 @@ bool runStemEngine(const std::filesystem::path& source,
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
     return exitCode == 0;
+}
+
+void writeAutomationResult(int result)
+{
+    const auto stateDir = userStateDirectory();
+    if (stateDir.empty()) return;
+    std::filesystem::create_directories(stateDir);
+    std::wofstream output(stateDir / L"automation-log.txt", std::ios::app);
+    SYSTEMTIME time{};
+    GetLocalTime(&time);
+    output << time.wYear << L'-' << time.wMonth << L'-' << time.wDay << L' '
+           << time.wHour << L':' << time.wMinute << L':' << time.wSecond
+           << L" result=" << result << L"\n";
 }
 
 bool waitForChangedState(const std::filesystem::path& stateFile,
@@ -472,6 +487,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         result = automateDialog(arguments[2], arguments[3]);
     else if (command == L"orchestrate" && argumentCount == 4)
         result = orchestrate(arguments[2], arguments[3]);
+    if (command == L"orchestrate")
+        writeAutomationResult(result);
     LocalFree(arguments);
     return result;
 }

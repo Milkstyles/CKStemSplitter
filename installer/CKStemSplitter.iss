@@ -1,5 +1,5 @@
 #define MyAppName "CK Stem Splitter"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "Commercial Kings"
 #define MyAppURL "https://commercialkings.com"
 
