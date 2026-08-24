@@ -25,6 +25,7 @@ public:
     void setSourceFile(const juce::File& file);
     juce::File getSourceFile() const;
     bool hasSourceFile() const;
+    void setTimelineOffsetSamples(juce::int64 offsetSamples) noexcept { timelineOffsetSamples.store(offsetSamples); }
 
     void startSeparation();
     bool isBusy() const noexcept { return busy.load(); }
@@ -54,13 +55,14 @@ private:
     double currentSampleRate = 44100.0;
     int currentBlockSize = 512;
     int currentChannels = 2;
+    std::atomic<juce::int64> timelineOffsetSamples { 0 };
 
     std::atomic<bool> busy { false };
     std::atomic<bool> stemsReady { false };
     std::atomic<float> progress { 0.0f };
     std::atomic<bool> shouldStop { false };
     std::thread workerThread;
-    juce::String status { "Choose a song to split" };
+    juce::String status { "Capture an Audition selection to split" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemEngine)
 };
