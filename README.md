@@ -1,4 +1,4 @@
-# CK Stem Splitter v1.0.3
+# CK Stem Splitter v1.0.4
 
 Self-contained Adobe Audition VST3 plus Windows companion for one-click, playback-free vocal/instrumental separation of the highlighted waveform selection.
 
@@ -25,6 +25,7 @@ The companion handles the two internal Apply passes because the full selection m
 - v1.0.1 runs the AI engine entirely in the external companion and reopens Audition only after both stem WAVs are complete.
 - v1.0.2 removes every automatic startup callback from the plugin window. The companion explicitly loads finished stems only during the automated second pass.
 - v1.0.3 locates the bundled engine relative to the companion executable and writes an automation result log for host-specific diagnostics.
+- v1.0.4 passes Audition's exact native effect-window handle to the companion and avoids host parameter notifications during capture.
 
 ## Installed locations
 

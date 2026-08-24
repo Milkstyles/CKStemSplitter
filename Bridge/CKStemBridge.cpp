@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <cstdint>
 #include <cwctype>
 #include <filesystem>
 #include <fstream>
@@ -287,7 +288,7 @@ bool sendRepeatWithoutApply()
     return SendInput(4, inputs, sizeof(INPUT)) == 4;
 }
 
-int orchestrate(const std::wstring& mode, const std::wstring& requestId)
+int orchestrate(const std::wstring& mode, const std::wstring& requestId, HWND suppliedPluginWindow)
 {
     const auto stateDir = userStateDirectory();
     if (stateDir.empty()) return 50;
@@ -296,7 +297,11 @@ int orchestrate(const std::wstring& mode, const std::wstring& requestId)
     const auto previousState = readTextFile(stateFile);
 
     const auto firstDeadline = Clock::now() + std::chrono::seconds(20);
-    HWND firstEffect = nullptr;
+    HWND firstEffect = suppliedPluginWindow != nullptr
+        ? GetAncestor(suppliedPluginWindow, GA_ROOT)
+        : nullptr;
+    if (firstEffect != nullptr && (!IsWindow(firstEffect) || !isAuditionWindow(firstEffect)))
+        firstEffect = nullptr;
     while (Clock::now() < firstDeadline && firstEffect == nullptr)
     {
         firstEffect = currentEffectWindow();
@@ -485,8 +490,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
         result = verifyWaveFile(arguments[2]) ? 0 : 30;
     else if (command == L"dialog" && argumentCount == 4)
         result = automateDialog(arguments[2], arguments[3]);
-    else if (command == L"orchestrate" && argumentCount == 4)
-        result = orchestrate(arguments[2], arguments[3]);
+    else if (command == L"orchestrate" && argumentCount == 5)
+    {
+        const auto rawWindow = static_cast<std::uintptr_t>(_wcstoui64(arguments[4], nullptr, 10));
+        result = orchestrate(arguments[2], arguments[3], reinterpret_cast<HWND>(rawWindow));
+    }
     if (command == L"orchestrate")
         writeAutomationResult(result);
     LocalFree(arguments);

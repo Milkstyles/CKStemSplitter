@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cstdint>
 
 namespace
 {
@@ -114,7 +115,9 @@ void CKStemSplitterAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
 
     const auto* modeParam = apvts.getRawParameterValue("mode");
-    const auto modeIndex = modeParam != nullptr ? static_cast<int>(modeParam->load()) : 0;
+    const auto modeIndex = capturingSelection.load()
+        ? 0
+        : (modeParam != nullptr ? static_cast<int>(modeParam->load()) : 0);
 
     stemEngine.process(buffer, static_cast<StemEngine::StemMode>(modeIndex), hostSamplePosition);
 
@@ -162,9 +165,6 @@ bool CKStemSplitterAudioProcessor::startSelectionCapture()
         captureWriter.reset(writer);
     }
 
-    if (auto* mode = apvts.getParameter("mode"))
-        mode->setValueNotifyingHost(0.0f);
-
     capturedSamples.store(0);
     captureStartHostSample.store(-1);
     lastCaptureActivityTicks.store(0);
@@ -173,7 +173,7 @@ bool CKStemSplitterAudioProcessor::startSelectionCapture()
     return true;
 }
 
-bool CKStemSplitterAudioProcessor::startAutomatedWorkflow(int modeIndex)
+bool CKStemSplitterAudioProcessor::startAutomatedWorkflow(int modeIndex, void* editorWindowHandle)
 {
     if (modeIndex != 1 && modeIndex != 2)
         return false;
@@ -198,7 +198,8 @@ bool CKStemSplitterAudioProcessor::startAutomatedWorkflow(int modeIndex)
     }
 
     const juce::String mode = modeIndex == 1 ? "acapella" : "instrumental";
-    const juce::String parameters = "orchestrate " + mode + " " + requestId;
+    const auto windowValue = static_cast<juce::int64>(reinterpret_cast<std::intptr_t>(editorWindowHandle));
+    const juce::String parameters = "orchestrate " + mode + " " + requestId + " " + juce::String(windowValue);
     if (!juce::Process::openDocument(companion.getFullPathName(),
                                      parameters))
     {
@@ -309,8 +310,8 @@ void CKStemSplitterAudioProcessor::checkAutomationRequestFromUi()
     const auto timelineOffset = lines[3].trim().getLargeIntValue();
     const juce::File vocalsFile(lines[4].trim());
     const juce::File instrumentalFile(lines[5].trim());
-    if (auto* mode = apvts.getParameter("mode"))
-        mode->setValueNotifyingHost(requestedMode == 1 ? 0.5f : 1.0f);
+    if (auto* mode = apvts.getRawParameterValue("mode"))
+        mode->store(static_cast<float>(requestedMode));
     capturedSelectionFile = scanFile;
     stemEngine.setTimelineOffsetSamples(juce::jmax<juce::int64>(0, timelineOffset));
     stemEngine.setSourceFile(scanFile);

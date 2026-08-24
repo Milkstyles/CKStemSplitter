@@ -24,13 +24,13 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
 
     captureButton.onClick = [this]
     {
-        processor.startAutomatedWorkflow(1);
+        processor.startAutomatedWorkflow(1, getPeer() != nullptr ? getPeer()->getNativeHandle() : nullptr);
     };
     addAndMakeVisible(captureButton);
 
     stopSplitButton.onClick = [this]
     {
-        processor.startAutomatedWorkflow(2);
+        processor.startAutomatedWorkflow(2, getPeer() != nullptr ? getPeer()->getNativeHandle() : nullptr);
     };
     addAndMakeVisible(stopSplitButton);
 

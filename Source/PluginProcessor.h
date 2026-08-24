@@ -35,7 +35,7 @@ public:
     StemEngine& getStemEngine() noexcept { return stemEngine; }
 
     bool startSelectionCapture();
-    bool startAutomatedWorkflow(int modeIndex);
+    bool startAutomatedWorkflow(int modeIndex, void* editorWindowHandle);
     void stopSelectionCaptureAndSplit();
     bool isCapturingSelection() const noexcept { return capturingSelection.load(); }
     juce::int64 getCapturedSamples() const noexcept { return capturedSamples.load(); }
