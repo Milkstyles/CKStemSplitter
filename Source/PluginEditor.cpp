@@ -100,6 +100,12 @@ void CKStemSplitterAudioProcessorEditor::resized()
 
 void CKStemSplitterAudioProcessorEditor::timerCallback()
 {
+    if (!attemptedScanRestore)
+    {
+        attemptedScanRestore = true;
+        processor.restoreLastScanFromUi();
+    }
+
     auto& engine = processor.getStemEngine();
     progressValue = engine.getProgress();
 

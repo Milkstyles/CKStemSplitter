@@ -1,4 +1,4 @@
-# CK Stem Splitter v0.9
+# CK Stem Splitter v0.9.1
 
 Self-contained Adobe Audition VST3 for playback-free vocal/instrumental separation of the highlighted waveform selection.
 
@@ -22,6 +22,7 @@ The two Apply passes are required because the full selection must be scanned bef
 - Renames Vocals to Acapella and preserves Instrumental as the second choice.
 - Removes the discontinued CEP selection-export panel during installation.
 - Bundles the existing `htdemucs_ft_vocals` FP16 model and frozen local engine.
+- v0.9.1 defers cross-Apply cache restoration to Audition's UI thread to avoid host crashes during audio initialization.
 
 ## Installed locations
 

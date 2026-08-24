@@ -55,6 +55,9 @@ jobs:
           if (!(Select-String -Path Source\PluginProcessor.cpp -Pattern "restoreLastScanState" -Quiet)) {
             throw "VST3 is missing cross-Apply stem cache restoration."
           }
+          if (Select-String -Path Source\PluginProcessor.cpp -Pattern "prepareToPlay[\s\S]*restoreLastScanState" -Quiet) {
+            throw "VST3 performs unsafe file restoration from Audition's audio preparation callback."
+          }
 
       - name: Install engine build dependencies
         shell: pwsh

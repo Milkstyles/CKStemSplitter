@@ -28,6 +28,7 @@ private:
     juce::ProgressBar progressBar;
     double progressValue = 0.0;
     juce::Label statusLabel;
+    bool attemptedScanRestore = false;
 
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;

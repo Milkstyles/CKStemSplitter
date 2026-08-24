@@ -40,6 +40,7 @@ public:
     bool isCapturingSelection() const noexcept { return capturingSelection.load(); }
     juce::int64 getCapturedSamples() const noexcept { return capturedSamples.load(); }
     juce::String getCaptureStatus() const;
+    void restoreLastScanFromUi();
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 

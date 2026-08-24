@@ -56,8 +56,6 @@ void CKStemSplitterAudioProcessor::prepareToPlay(double sampleRate, int samplesP
     captureSampleRate = sampleRate;
     captureChannels = juce::jmax(1, getTotalNumInputChannels());
     stemEngine.prepare(sampleRate, samplesPerBlock, getTotalNumOutputChannels());
-    if (!restoredLastScan)
-        restoreLastScanState();
 }
 
 void CKStemSplitterAudioProcessor::releaseResources()
@@ -247,6 +245,13 @@ void CKStemSplitterAudioProcessor::restoreLastScanState()
     stemEngine.setSourceFile(scanFile);
     setCaptureStatus("Restoring the completed selection scan...");
     stemEngine.startSeparation();
+}
+
+void CKStemSplitterAudioProcessor::restoreLastScanFromUi()
+{
+    jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
+    if (!restoredLastScan)
+        restoreLastScanState();
 }
 
 void CKStemSplitterAudioProcessor::setCaptureStatus(const juce::String& newStatus)
