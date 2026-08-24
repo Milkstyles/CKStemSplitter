@@ -15,13 +15,24 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     subtitleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(subtitleLabel);
 
-    loadButton.onClick = [this] { chooseAudioFile(); };
-    addAndMakeVisible(loadButton);
+    instructionLabel.setText("1. Highlight audio in Audition   2. Capture   3. Preview/Play selection   4. Stop & Split   5. Choose stem + Apply",
+                             juce::dontSendNotification);
+    instructionLabel.setFont(juce::Font(12.0f));
+    instructionLabel.setJustificationType(juce::Justification::centred);
+    instructionLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible(instructionLabel);
 
-    fileLabel.setText("No audio file selected", juce::dontSendNotification);
-    fileLabel.setJustificationType(juce::Justification::centredLeft);
-    fileLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
-    addAndMakeVisible(fileLabel);
+    captureButton.onClick = [this]
+    {
+        processor.startSelectionCapture();
+    };
+    addAndMakeVisible(captureButton);
+
+    stopSplitButton.onClick = [this]
+    {
+        processor.stopSelectionCaptureAndSplit();
+    };
+    addAndMakeVisible(stopSplitButton);
 
     modeBox.addItem("Original", 1);
     modeBox.addItem("Vocals", 2);
@@ -37,42 +48,18 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     outputGainLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(outputGainLabel);
 
-    analyzeButton.onClick = [this]
-    {
-        processor.getStemEngine().startSeparation();
-    };
-    addAndMakeVisible(analyzeButton);
-
     progressBar.setPercentageDisplay(true);
     addAndMakeVisible(progressBar);
 
     statusLabel.setJustificationType(juce::Justification::centred);
     statusLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    statusLabel.setMinimumHorizontalScale(0.72f);
     addAndMakeVisible(statusLabel);
 
     modeAttachment = std::make_unique<ComboAttachment>(processor.getAPVTS(), "mode", modeBox);
     gainAttachment = std::make_unique<SliderAttachment>(processor.getAPVTS(), "outputGain", outputGainSlider);
 
     startTimerHz(12);
-}
-
-void CKStemSplitterAudioProcessorEditor::chooseAudioFile()
-{
-    fileChooser = std::make_unique<juce::FileChooser>(
-        "Choose a song to split",
-        juce::File{},
-        "*.wav;*.mp3;*.flac;*.ogg;*.aif;*.aiff");
-
-    const auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-    fileChooser->launchAsync(flags, [this](const juce::FileChooser& chooser)
-    {
-        const auto file = chooser.getResult();
-        if (file.existsAsFile())
-        {
-            processor.getStemEngine().setSourceFile(file);
-            fileLabel.setText(file.getFileName(), juce::dontSendNotification);
-        }
-    });
 }
 
 void CKStemSplitterAudioProcessorEditor::paint(juce::Graphics& g)
@@ -85,31 +72,58 @@ void CKStemSplitterAudioProcessorEditor::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour::fromRGB(210, 35, 45));
     g.fillRoundedRectangle(45.0f, 102.0f, 530.0f, 4.0f, 2.0f);
+
+    if (processor.isCapturingSelection())
+    {
+        g.setColour(juce::Colour::fromRGB(210, 35, 45));
+        g.drawRoundedRectangle(45.0f, 148.0f, 530.0f, 58.0f, 7.0f, 2.0f);
+    }
 }
 
 void CKStemSplitterAudioProcessorEditor::resized()
 {
-    titleLabel.setBounds(50, 35, 520, 42);
-    subtitleLabel.setBounds(50, 75, 520, 22);
+    titleLabel.setBounds(50, 30, 520, 42);
+    subtitleLabel.setBounds(50, 70, 520, 22);
+    instructionLabel.setBounds(40, 112, 540, 28);
 
-    loadButton.setBounds(55, 125, 145, 38);
-    fileLabel.setBounds(215, 125, 350, 38);
+    captureButton.setBounds(55, 158, 240, 40);
+    stopSplitButton.setBounds(325, 158, 240, 40);
 
-    modeBox.setBounds(55, 185, 300, 38);
+    modeBox.setBounds(55, 225, 300, 38);
 
-    outputGainLabel.setBounds(425, 172, 120, 22);
-    outputGainSlider.setBounds(430, 195, 110, 110);
+    outputGainLabel.setBounds(425, 212, 120, 22);
+    outputGainSlider.setBounds(430, 235, 110, 105);
 
-    analyzeButton.setBounds(55, 250, 300, 48);
-    progressBar.setBounds(55, 320, 490, 22);
-    statusLabel.setBounds(55, 360, 510, 28);
+    progressBar.setBounds(55, 295, 300, 22);
+    statusLabel.setBounds(45, 342, 530, 42);
 }
 
 void CKStemSplitterAudioProcessorEditor::timerCallback()
 {
     auto& engine = processor.getStemEngine();
     progressValue = engine.getProgress();
-    statusLabel.setText(engine.getStatus(), juce::dontSendNotification);
-    analyzeButton.setEnabled(!engine.isBusy() && engine.hasSourceFile());
-    loadButton.setEnabled(!engine.isBusy());
+
+    const bool capturing = processor.isCapturingSelection();
+    const bool busy = engine.isBusy();
+
+    if (busy || engine.hasSeparatedStems())
+        statusLabel.setText(engine.getStatus(), juce::dontSendNotification);
+    else
+        statusLabel.setText(processor.getCaptureStatus(), juce::dontSendNotification);
+
+    captureButton.setEnabled(!busy && !capturing);
+    stopSplitButton.setEnabled(capturing);
+    modeBox.setEnabled(!busy);
+
+    if (capturing)
+    {
+        const auto seconds = processor.getCapturedSamples() / 44100.0;
+        captureButton.setButtonText("CAPTURING " + juce::String(seconds, 1) + "s");
+    }
+    else
+    {
+        captureButton.setButtonText("CAPTURE SELECTION");
+    }
+
+    repaint();
 }
