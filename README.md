@@ -1,40 +1,33 @@
-# CK Stem Splitter v0.8
+# CK Stem Splitter v0.9
 
-Self-contained Windows stem separator with an Adobe Audition playback-free selection panel.
+Self-contained Adobe Audition VST3 for playback-free vocal/instrumental separation of the highlighted waveform selection.
 
-## User workflow
+## Audition workflow
 
-1. Open a file in Audition's **Waveform Editor** and highlight the range to process.
-2. Open **Window > Extensions > CK Stem Splitter**.
-3. Click **Split Highlighted Selection**. The panel invokes Audition's native **Save Selection As** command and its bundled helper supplies a private temporary WAV path; the user never browses for a file and audio is not played.
-4. Choose **Vocals** or **Instrumental**.
-5. Click **Replace Selection**. The panel opens the generated stem, transfers it through Audition's internal audio clipboard, returns to the original waveform, and pastes over the highlighted range.
-6. Use Audition **Undo** to restore the original audio if needed.
+1. Highlight a range in Audition's Waveform Editor.
+2. Open **Effects > VST3 > Commercial Kings > CK Stem Splitter**.
+3. Click **Scan Selection**, then click Audition's **Apply** once. Audition renders the highlighted range through the effect offline; CK captures it while passing the original through unchanged. Playback is not required.
+4. Wait for **Stems ready**, then choose **Acapella** or **Instrumental**.
+5. Keep the same range highlighted and click Audition's **Apply** again. The selected stem replaces that range in the current file.
+6. Use Audition Undo to restore the original if needed.
 
-## v0.8 changes
+The two Apply passes are required because the full selection must be scanned before the AI model can calculate a stem. The temporary capture and stem cache are private implementation details; there is no Save window, file browser, manually opened file, upload, Python installation, or model download.
 
-- Replaces the incompatible Windows audio-clipboard capture path with Audition 26.3's native `File.SaveSelectionAs` command.
-- Automates only the Audition file dialogs opened by the user's Split or Apply action.
-- Uses Audition's internal clipboard for the final replacement, which is required because Audition 26.3 does not publish waveform audio to the Windows clipboard.
-- Removes the optional VST3 from the installer and deletes the old copy during upgrades because it crashed Audition 26.3 on launch.
-- Keeps the existing local `htdemucs_ft_vocals` FP16 engine and model; no upload, Python installation, model download, playback, or manual file browsing is required.
+## v0.9 changes
+
+- Restores the Effects-panel VST3 based on the working capture/apply build.
+- Automatically finishes capture when Audition's offline Apply pass becomes idle or releases the effect.
+- Keeps the first pass transparent so it does not alter the current waveform.
+- Renames Vocals to Acapella and preserves Instrumental as the second choice.
+- Removes the discontinued CEP selection-export panel during installation.
+- Bundles the existing `htdemucs_ft_vocals` FP16 model and frozen local engine.
 
 ## Installed locations
 
-Private AI engine and model:
-
-`C:\ProgramData\Commercial Kings\CK Stem Splitter\engine\`
-
-Per-user temporary jobs:
-
-`%APPDATA%\Commercial Kings\CK Stem Splitter\Jobs\`
-
-Audition panel:
-
-`C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\com.commercialkings.ckstemsplitter\`
+- VST3: `C:\Program Files\Common Files\VST3\CK Stem Splitter.vst3`
+- Engine/model: `C:\ProgramData\Commercial Kings\CK Stem Splitter\engine\`
+- Private capture/cache: `%TEMP%\Commercial Kings\CK Stem Splitter\` and `%APPDATA%\Commercial Kings\CK Stem Splitter\Cache\`
 
 ## Automated Windows build
 
-The GitHub Actions workflow `.github/workflows/windows-ci.yml` builds the x64 Audition helper, validates the panel and manifest, freezes the private separation engine, prewarms the bundled model, runs a real stem-separation smoke test, packages everything with Inno Setup, and uploads the installer plus its SHA-256 checksum.
-
-The earlier JUCE VST3 source remains in the repository for reference, but v0.8 does not build or install it.
+`.github/workflows/windows-ci.yml` compiles the VST3, checks the offline-scan implementation, freezes the stem engine, bundles the model, runs a real separation smoke test, packages the installer, generates a SHA-256 checksum, and uploads the Windows artifact.

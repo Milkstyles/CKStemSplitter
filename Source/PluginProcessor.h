@@ -2,7 +2,8 @@
 #include <JuceHeader.h>
 #include "StemEngine.h"
 
-class CKStemSplitterAudioProcessor : public juce::AudioProcessor
+class CKStemSplitterAudioProcessor : public juce::AudioProcessor,
+                                      private juce::Timer
 {
 public:
     CKStemSplitterAudioProcessor();
@@ -43,23 +44,24 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
+    void timerCallback() override;
     void setCaptureStatus(const juce::String& newStatus);
 
     juce::AudioProcessorValueTreeState apvts;
     StemEngine stemEngine;
 
-    juce::TimeSliceThread captureWriterThread { "CK Selection Capture Writer" };
-    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> captureWriter;
+    std::unique_ptr<juce::AudioFormatWriter> captureWriter;
     juce::SpinLock captureWriterLock;
     juce::File capturedSelectionFile;
     std::atomic<bool> capturingSelection { false };
     std::atomic<juce::int64> capturedSamples { 0 };
     std::atomic<juce::int64> captureStartHostSample { -1 };
+    std::atomic<juce::int64> lastCaptureActivityTicks { 0 };
     double captureSampleRate = 44100.0;
     int captureChannels = 2;
 
     mutable juce::CriticalSection captureStatusLock;
-    juce::String captureStatus { "For no-playback splitting, open Window > Extensions > CK Stem Splitter" };
+    juce::String captureStatus { "Highlight audio, click SCAN SELECTION, then click Audition Apply" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CKStemSplitterAudioProcessor)
 };

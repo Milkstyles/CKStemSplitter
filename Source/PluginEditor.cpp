@@ -10,12 +10,12 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
 
-    subtitleLabel.setText("VST3 PREVIEW / PLAYBACK MODE", juce::dontSendNotification);
+    subtitleLabel.setText("AUDITION OFFLINE SELECTION EFFECT", juce::dontSendNotification);
     subtitleLabel.setFont(juce::Font(13.0f));
     subtitleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(subtitleLabel);
 
-    instructionLabel.setText("NO-PLAYBACK WORKFLOW:  Window > Extensions > CK Stem Splitter",
+    instructionLabel.setText("1. SCAN + Audition Apply   2. Choose stem   3. Audition Apply again",
                              juce::dontSendNotification);
     instructionLabel.setFont(juce::Font(12.0f));
     instructionLabel.setJustificationType(juce::Justification::centred);
@@ -35,7 +35,7 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     addAndMakeVisible(stopSplitButton);
 
     modeBox.addItem("Original", 1);
-    modeBox.addItem("Vocals", 2);
+    modeBox.addItem("Acapella", 2);
     modeBox.addItem("Instrumental", 3);
     addAndMakeVisible(modeBox);
 
@@ -118,11 +118,13 @@ void CKStemSplitterAudioProcessorEditor::timerCallback()
     if (capturing)
     {
         const auto seconds = processor.getCapturedSamples() / 44100.0;
-        captureButton.setButtonText("CAPTURING " + juce::String(seconds, 1) + "s");
+        captureButton.setButtonText(seconds > 0.0
+            ? "SCANNED " + juce::String(seconds, 1) + "s"
+            : "SCAN ARMED - CLICK AUDITION APPLY");
     }
     else
     {
-        captureButton.setButtonText("LEGACY REAL-TIME CAPTURE");
+        captureButton.setButtonText("SCAN SELECTION");
     }
 
     repaint();

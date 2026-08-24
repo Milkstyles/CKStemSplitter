@@ -7,17 +7,17 @@ CKStemSplitterAudioProcessor::CKStemSplitterAudioProcessor()
         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
-    captureWriterThread.startThread();
+    startTimerHz(10);
 }
 
 CKStemSplitterAudioProcessor::~CKStemSplitterAudioProcessor()
 {
+    stopTimer();
     capturingSelection.store(false);
     {
         const juce::SpinLock::ScopedLockType lock(captureWriterLock);
         captureWriter.reset();
     }
-    captureWriterThread.stopThread(3000);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout CKStemSplitterAudioProcessor::createParameterLayout()
@@ -27,7 +27,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CKStemSplitterAudioProcessor
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{"mode", 1},
         "Output",
-        juce::StringArray{"Original", "Vocals", "Instrumental"},
+        juce::StringArray{"Original", "Acapella", "Instrumental"},
         0));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -49,6 +49,8 @@ void CKStemSplitterAudioProcessor::prepareToPlay(double sampleRate, int samplesP
 
 void CKStemSplitterAudioProcessor::releaseResources()
 {
+    if (capturingSelection.load() && capturedSamples.load() > 0)
+        stopSelectionCaptureAndSplit();
     stemEngine.reset();
 }
 
@@ -98,7 +100,10 @@ void CKStemSplitterAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
                 channelData[1] = channelData[0];
 
             if (captureWriter->write(channelData, buffer.getNumSamples()))
+            {
                 capturedSamples.fetch_add(buffer.getNumSamples());
+                lastCaptureActivityTicks.store(juce::Time::getHighResolutionTicks());
+            }
         }
     }
 
@@ -148,14 +153,33 @@ bool CKStemSplitterAudioProcessor::startSelectionCapture()
 
     {
         const juce::SpinLock::ScopedLockType lock(captureWriterLock);
-        captureWriter = std::make_unique<juce::AudioFormatWriter::ThreadedWriter>(writer, captureWriterThread, 262144);
+        captureWriter.reset(writer);
     }
+
+    if (auto* mode = apvts.getParameter("mode"))
+        mode->setValueNotifyingHost(0.0f);
 
     capturedSamples.store(0);
     captureStartHostSample.store(-1);
+    lastCaptureActivityTicks.store(0);
     capturingSelection.store(true);
-    setCaptureStatus("CAPTURING - press Audition Preview/Play for the highlighted audio, then click STOP & SPLIT");
+    setCaptureStatus("SCAN ARMED - click Audition Apply once; playback is not required");
     return true;
+}
+
+void CKStemSplitterAudioProcessor::timerCallback()
+{
+    if (!capturingSelection.load() || capturedSamples.load() == 0)
+        return;
+
+    const auto lastTicks = lastCaptureActivityTicks.load();
+    if (lastTicks <= 0)
+        return;
+
+    const auto elapsed = juce::Time::highResolutionTicksToSeconds(
+        juce::Time::getHighResolutionTicks() - lastTicks);
+    if (elapsed >= 0.65)
+        stopSelectionCaptureAndSplit();
 }
 
 void CKStemSplitterAudioProcessor::stopSelectionCaptureAndSplit()
@@ -171,14 +195,14 @@ void CKStemSplitterAudioProcessor::stopSelectionCaptureAndSplit()
     if (capturedSamples.load() < static_cast<juce::int64>(captureSampleRate * 0.10))
     {
         capturedSelectionFile.deleteFile();
-        setCaptureStatus("No selection audio was captured - click CAPTURE, then preview the highlighted audio");
+        setCaptureStatus("No audio was scanned - keep the range highlighted and click Audition Apply");
         return;
     }
 
     const auto startSample = juce::jmax<juce::int64>(0, captureStartHostSample.load());
     stemEngine.setTimelineOffsetSamples(startSample);
     stemEngine.setSourceFile(capturedSelectionFile);
-    setCaptureStatus("Selection captured - starting AI separation...");
+    setCaptureStatus("Selection scanned - starting AI separation...");
     stemEngine.startSeparation();
 }
 

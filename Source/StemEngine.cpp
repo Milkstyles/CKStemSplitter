@@ -303,7 +303,7 @@ bool StemEngine::loadCachedStems(const juce::File& vocalsFile, const juce::File&
         instrumentalTransport.start();
         expectedHostSamplePosition.store(-1);
         lastRenderedMode.store(-1);
-        status = "Stems ready - choose Vocals or Instrumental, then click Audition Apply";
+        status = "Stems ready - choose Acapella or Instrumental, then click Audition Apply";
     }
 
     stemsReady.store(true);
