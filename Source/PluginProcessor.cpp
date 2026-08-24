@@ -7,6 +7,17 @@ CKStemSplitterAudioProcessor::CKStemSplitterAudioProcessor()
         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
+    captureWriterThread.startThread();
+}
+
+CKStemSplitterAudioProcessor::~CKStemSplitterAudioProcessor()
+{
+    capturingSelection.store(false);
+    {
+        const juce::SpinLock::ScopedLockType lock(captureWriterLock);
+        captureWriter.reset();
+    }
+    captureWriterThread.stopThread(3000);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout CKStemSplitterAudioProcessor::createParameterLayout()
@@ -31,6 +42,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout CKStemSplitterAudioProcessor
 
 void CKStemSplitterAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    captureSampleRate = sampleRate;
+    captureChannels = juce::jmax(1, getTotalNumInputChannels());
     stemEngine.prepare(sampleRate, samplesPerBlock, getTotalNumOutputChannels());
 }
 
@@ -58,24 +71,127 @@ void CKStemSplitterAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     for (auto ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear(ch, 0, buffer.getNumSamples());
 
-    const auto* modeParam = apvts.getRawParameterValue("mode");
-    const auto modeIndex = modeParam != nullptr ? static_cast<int>(modeParam->load()) : 0;
-
     juce::int64 hostSamplePosition = -1;
-    if (auto* playHead = getPlayHead())
+    if (auto* currentPlayHead = getPlayHead())
     {
-        if (auto pos = playHead->getPosition())
+        if (auto pos = currentPlayHead->getPosition())
         {
             if (auto samplePos = pos->getTimeInSamples())
                 hostSamplePosition = *samplePos;
         }
     }
 
+    if (capturingSelection.load())
+    {
+        if (captureStartHostSample.load() < 0 && hostSamplePosition >= 0)
+            captureStartHostSample.store(hostSamplePosition);
+
+        const juce::SpinLock::ScopedTryLockType lock(captureWriterLock);
+        if (lock.isLocked() && captureWriter != nullptr)
+        {
+            const auto channelsToWrite = juce::jmin(captureChannels, buffer.getNumChannels());
+            const float* channelData[2] { nullptr, nullptr };
+            for (int ch = 0; ch < channelsToWrite && ch < 2; ++ch)
+                channelData[ch] = buffer.getReadPointer(ch);
+
+            if (channelsToWrite == 1)
+                channelData[1] = channelData[0];
+
+            if (captureWriter->write(channelData, buffer.getNumSamples()))
+                capturedSamples.fetch_add(buffer.getNumSamples());
+        }
+    }
+
+    const auto* modeParam = apvts.getRawParameterValue("mode");
+    const auto modeIndex = modeParam != nullptr ? static_cast<int>(modeParam->load()) : 0;
+
     stemEngine.process(buffer, static_cast<StemEngine::StemMode>(modeIndex), hostSamplePosition);
 
     const auto* gainParam = apvts.getRawParameterValue("outputGain");
     const float gainDb = gainParam != nullptr ? gainParam->load() : 0.0f;
     buffer.applyGain(juce::Decibels::decibelsToGain(gainDb));
+}
+
+bool CKStemSplitterAudioProcessor::startSelectionCapture()
+{
+    if (stemEngine.isBusy() || capturingSelection.load())
+        return false;
+
+    const auto capturesDir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+        .getChildFile("Commercial Kings")
+        .getChildFile("CK Stem Splitter")
+        .getChildFile("Captures");
+    capturesDir.createDirectory();
+
+    capturedSelectionFile = capturesDir.getNonexistentChildFile(
+        "audition-selection-" + juce::String(juce::Time::currentTimeMillis()), ".wav", false);
+
+    auto stream = capturedSelectionFile.createOutputStream();
+    if (stream == nullptr || !stream->openedOk())
+    {
+        setCaptureStatus("Could not create the temporary capture file");
+        return false;
+    }
+
+    juce::WavAudioFormat wav;
+    auto* writer = wav.createWriterFor(stream.release(),
+                                       captureSampleRate,
+                                       static_cast<unsigned int>(juce::jlimit(1, 2, captureChannels)),
+                                       32,
+                                       {},
+                                       0);
+    if (writer == nullptr)
+    {
+        setCaptureStatus("Could not start the WAV capture writer");
+        return false;
+    }
+
+    {
+        const juce::SpinLock::ScopedLockType lock(captureWriterLock);
+        captureWriter = std::make_unique<juce::AudioFormatWriter::ThreadedWriter>(writer, captureWriterThread, 262144);
+    }
+
+    capturedSamples.store(0);
+    captureStartHostSample.store(-1);
+    capturingSelection.store(true);
+    setCaptureStatus("CAPTURING - press Audition Preview/Play for the highlighted audio, then click STOP & SPLIT");
+    return true;
+}
+
+void CKStemSplitterAudioProcessor::stopSelectionCaptureAndSplit()
+{
+    if (!capturingSelection.exchange(false))
+        return;
+
+    {
+        const juce::SpinLock::ScopedLockType lock(captureWriterLock);
+        captureWriter.reset();
+    }
+
+    if (capturedSamples.load() < static_cast<juce::int64>(captureSampleRate * 0.10))
+    {
+        capturedSelectionFile.deleteFile();
+        setCaptureStatus("No selection audio was captured - click CAPTURE, then preview the highlighted audio");
+        return;
+    }
+
+    const auto startSample = juce::jmax<juce::int64>(0, captureStartHostSample.load());
+    stemEngine.setTimelineOffsetSamples(startSample);
+    stemEngine.setSourceFile(capturedSelectionFile);
+    setCaptureStatus("Selection captured - starting AI separation...");
+    stemEngine.startSeparation();
+}
+
+void CKStemSplitterAudioProcessor::setCaptureStatus(const juce::String& newStatus)
+{
+    const juce::ScopedLock lock(captureStatusLock);
+    captureStatus = newStatus;
+}
+
+juce::String CKStemSplitterAudioProcessor::getCaptureStatus() const
+{
+    const juce::ScopedLock lock(captureStatusLock);
+    return captureStatus;
 }
 
 juce::AudioProcessorEditor* CKStemSplitterAudioProcessor::createEditor()
@@ -85,12 +201,7 @@ juce::AudioProcessorEditor* CKStemSplitterAudioProcessor::createEditor()
 
 void CKStemSplitterAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    auto state = apvts.copyState();
-    const auto source = stemEngine.getSourceFile();
-    if (source.existsAsFile())
-        state.setProperty("sourceFile", source.getFullPathName(), nullptr);
-
-    if (auto xml = state.createXml())
+    if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary(*xml, destData);
 }
 
@@ -99,19 +210,7 @@ void CKStemSplitterAudioProcessor::setStateInformation(const void* data, int siz
     if (auto xml = getXmlFromBinary(data, sizeInBytes))
     {
         if (xml->hasTagName(apvts.state.getType()))
-        {
-            auto restored = juce::ValueTree::fromXml(*xml);
-            const auto sourcePath = restored.getProperty("sourceFile").toString();
-            restored.removeProperty("sourceFile", nullptr);
-            apvts.replaceState(restored);
-
-            if (sourcePath.isNotEmpty())
-            {
-                const juce::File source(sourcePath);
-                if (source.existsAsFile())
-                    stemEngine.setSourceFile(source);
-            }
-        }
+            apvts.replaceState(juce::ValueTree::fromXml(*xml));
     }
 }
 
