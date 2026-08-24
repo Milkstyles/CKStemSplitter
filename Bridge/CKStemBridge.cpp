@@ -1,177 +1,162 @@
 #include <windows.h>
 #include <shellapi.h>
 
-#include <cstdint>
+#include <algorithm>
+#include <chrono>
+#include <cwctype>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
 {
-constexpr std::uint32_t fourcc(char a, char b, char c, char d)
+using Clock = std::chrono::steady_clock;
+
+bool isAuditionWindow(HWND window)
 {
-    return static_cast<std::uint32_t>(static_cast<unsigned char>(a))
-         | (static_cast<std::uint32_t>(static_cast<unsigned char>(b)) << 8)
-         | (static_cast<std::uint32_t>(static_cast<unsigned char>(c)) << 16)
-         | (static_cast<std::uint32_t>(static_cast<unsigned char>(d)) << 24);
+    DWORD processId = 0;
+    GetWindowThreadProcessId(window, &processId);
+    if (processId == 0) return false;
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+    if (process == nullptr) return false;
+    std::vector<wchar_t> path(32768);
+    DWORD size = static_cast<DWORD>(path.size());
+    const bool queried = QueryFullProcessImageNameW(process, 0, path.data(), &size) != FALSE;
+    CloseHandle(process);
+    if (!queried) return false;
+    std::wstring executable(path.data(), size);
+    std::transform(executable.begin(), executable.end(), executable.begin(),
+                   [](wchar_t character) { return static_cast<wchar_t>(std::towlower(character)); });
+    return executable.ends_with(L"adobe audition.exe");
 }
 
-std::uint32_t readU32(const unsigned char* data)
+struct DialogSearch { HWND window = nullptr; };
+
+BOOL CALLBACK findDialog(HWND window, LPARAM parameter)
 {
-    return static_cast<std::uint32_t>(data[0])
-         | (static_cast<std::uint32_t>(data[1]) << 8)
-         | (static_cast<std::uint32_t>(data[2]) << 16)
-         | (static_cast<std::uint32_t>(data[3]) << 24);
-}
-
-bool isRiffWave(const std::vector<unsigned char>& bytes)
-{
-    return bytes.size() >= 12
-        && readU32(bytes.data()) == fourcc('R', 'I', 'F', 'F')
-        && readU32(bytes.data() + 8) == fourcc('W', 'A', 'V', 'E');
-}
-
-bool readFile(const std::filesystem::path& path, std::vector<unsigned char>& bytes)
-{
-    std::ifstream input(path, std::ios::binary | std::ios::ate);
-    if (!input)
-        return false;
-
-    const auto size = input.tellg();
-    if (size <= 0)
-        return false;
-
-    const auto byteCount = static_cast<std::streamsize>(size);
-    bytes.resize(static_cast<std::size_t>(byteCount));
-    input.seekg(0, std::ios::beg);
-    return static_cast<bool>(input.read(reinterpret_cast<char*>(bytes.data()), byteCount));
-}
-
-bool writeFile(const std::filesystem::path& path, const std::vector<unsigned char>& bytes)
-{
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    return output && static_cast<bool>(output.write(
-        reinterpret_cast<const char*>(bytes.data()),
-        static_cast<std::streamsize>(bytes.size())));
-}
-
-bool openClipboardWithRetry()
-{
-    for (int attempt = 0; attempt < 30; ++attempt)
+    auto* result = reinterpret_cast<DialogSearch*>(parameter);
+    if (result->window != nullptr || !IsWindowVisible(window) || !IsWindowEnabled(window)) return TRUE;
+    wchar_t className[64]{};
+    GetClassNameW(window, className, static_cast<int>(std::size(className)));
+    if (wcscmp(className, L"#32770") == 0 && isAuditionWindow(window))
     {
-        if (OpenClipboard(nullptr))
-            return true;
-        Sleep(50);
+        result->window = window;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+HWND currentAuditionDialog()
+{
+    DialogSearch result;
+    EnumWindows(findDialog, reinterpret_cast<LPARAM>(&result));
+    return result.window;
+}
+
+struct EditSearch { HWND filename = nullptr; };
+
+BOOL CALLBACK findFilenameEdit(HWND child, LPARAM parameter)
+{
+    auto* result = reinterpret_cast<EditSearch*>(parameter);
+    if (!IsWindowVisible(child) || !IsWindowEnabled(child)) return TRUE;
+    wchar_t className[64]{};
+    GetClassNameW(child, className, static_cast<int>(std::size(className)));
+    if (wcscmp(className, L"Edit") == 0) result->filename = child;
+    return TRUE;
+}
+
+bool setDialogFilename(HWND dialog, const std::wstring& filename)
+{
+    EditSearch search;
+    EnumChildWindows(dialog, findFilenameEdit, reinterpret_cast<LPARAM>(&search));
+    if (search.filename == nullptr) return false;
+    SendMessageW(search.filename, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(filename.c_str()));
+    SendMessageW(search.filename, EM_SETSEL, 0, -1);
+    return true;
+}
+
+bool pressDefaultButton(HWND dialog)
+{
+    HWND button = GetDlgItem(dialog, IDOK);
+    if (button == nullptr || !IsWindowEnabled(button)) return false;
+    SendMessageW(button, BM_CLICK, 0, 0);
+    return true;
+}
+
+bool waitForStableFile(const std::filesystem::path& path, Clock::time_point deadline)
+{
+    std::uintmax_t previousSize = 0;
+    int stableChecks = 0;
+    while (Clock::now() < deadline)
+    {
+        std::error_code error;
+        if (std::filesystem::is_regular_file(path, error))
+        {
+            const auto size = std::filesystem::file_size(path, error);
+            if (!error && size > 44 && size == previousSize)
+            {
+                if (++stableChecks >= 4) return true;
+            }
+            else
+            {
+                stableChecks = 0;
+                previousSize = size;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
     return false;
 }
 
-int captureClipboardWave(const std::filesystem::path& outputPath)
+int automateDialog(const std::wstring& mode, const std::filesystem::path& path)
 {
-    if (!openClipboardWithRetry())
-        return 10;
-
-    // Audition commonly uses CF_RIFF for 32-bit float selections and CF_WAVE
-    // for standard PCM. Both contain complete RIFF/WAVE file bytes.
-    HANDLE handle = GetClipboardData(CF_RIFF);
-    if (handle == nullptr)
-        handle = GetClipboardData(CF_WAVE);
-    if (handle == nullptr)
+    const auto deadline = Clock::now() + std::chrono::seconds(45);
+    HWND mainDialog = nullptr;
+    while (Clock::now() < deadline && mainDialog == nullptr)
     {
-        CloseClipboard();
-        return 11;
+        mainDialog = currentAuditionDialog();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    if (mainDialog == nullptr) return 40;
+    if (!setDialogFilename(mainDialog, path.wstring()) || !pressDefaultButton(mainDialog)) return 41;
+
+    const auto secondaryDeadline = Clock::now() + std::chrono::seconds(8);
+    while (Clock::now() < secondaryDeadline)
+    {
+        HWND dialog = currentAuditionDialog();
+        if (dialog != nullptr && dialog != mainDialog)
+        {
+            pressDefaultButton(dialog);
+            break;
+        }
+        if (mode == L"open" && !IsWindow(mainDialog)) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    const auto byteCount = GlobalSize(handle);
-    const auto* memory = static_cast<const unsigned char*>(GlobalLock(handle));
-    if (memory == nullptr || byteCount < 12)
+    if (mode == L"save") return waitForStableFile(path, deadline) ? 0 : 42;
+    for (int attempt = 0; attempt < 80; ++attempt)
     {
-        if (memory != nullptr)
-            GlobalUnlock(handle);
-        CloseClipboard();
-        return 12;
+        if (!IsWindow(mainDialog))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(800));
+            return 0;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-
-    std::vector<unsigned char> bytes(memory, memory + byteCount);
-    GlobalUnlock(handle);
-    CloseClipboard();
-
-    if (!isRiffWave(bytes))
-        return 13;
-
-    return writeFile(outputPath, bytes) ? 0 : 14;
+    return 43;
 }
 
-int publishClipboardWave(const std::filesystem::path& inputPath)
+bool verifyWaveFile(const std::filesystem::path& inputPath)
 {
-    std::vector<unsigned char> bytes;
-    if (!readFile(inputPath, bytes) || !isRiffWave(bytes))
-        return 20;
-
-    if (!openClipboardWithRetry())
-        return 21;
-
-    if (!EmptyClipboard())
-    {
-        CloseClipboard();
-        return 22;
-    }
-
-    HGLOBAL memoryHandle = GlobalAlloc(GMEM_MOVEABLE, bytes.size());
-    if (memoryHandle == nullptr)
-    {
-        CloseClipboard();
-        return 23;
-    }
-
-    void* memory = GlobalLock(memoryHandle);
-    if (memory == nullptr)
-    {
-        GlobalFree(memoryHandle);
-        CloseClipboard();
-        return 24;
-    }
-
-    CopyMemory(memory, bytes.data(), bytes.size());
-    GlobalUnlock(memoryHandle);
-
-    if (SetClipboardData(CF_RIFF, memoryHandle) == nullptr)
-    {
-        GlobalFree(memoryHandle);
-        CloseClipboard();
-        return 25;
-    }
-
-    // Also advertise CF_WAVE for hosts that only request the older standard
-    // format. The clipboard owns each successfully published memory handle.
-    HGLOBAL waveHandle = GlobalAlloc(GMEM_MOVEABLE, bytes.size());
-    if (waveHandle != nullptr)
-    {
-        void* waveMemory = GlobalLock(waveHandle);
-        if (waveMemory != nullptr)
-        {
-            CopyMemory(waveMemory, bytes.data(), bytes.size());
-            GlobalUnlock(waveHandle);
-            if (SetClipboardData(CF_WAVE, waveHandle) == nullptr)
-                GlobalFree(waveHandle);
-        }
-        else
-        {
-            GlobalFree(waveHandle);
-        }
-    }
-
-    CloseClipboard();
-    return 0;
-}
-
-int verifyWaveFile(const std::filesystem::path& inputPath)
-{
-    std::vector<unsigned char> bytes;
-    return readFile(inputPath, bytes) && isRiffWave(bytes) ? 0 : 30;
+    std::ifstream input(inputPath, std::ios::binary);
+    char header[12]{};
+    input.read(header, sizeof(header));
+    return input.gcount() == sizeof(header)
+        && std::string(header, 4) == "RIFF"
+        && std::string(header + 8, 4) == "WAVE";
 }
 }
 
@@ -179,22 +164,17 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
 {
     int argumentCount = 0;
     LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount);
-    if (arguments == nullptr || argumentCount != 3)
+    if (arguments == nullptr || argumentCount < 3)
     {
-        if (arguments != nullptr)
-            LocalFree(arguments);
+        if (arguments != nullptr) LocalFree(arguments);
         return 2;
     }
-
     const std::wstring command(arguments[1]);
-    const std::filesystem::path path(arguments[2]);
+    int result = 3;
+    if (command == L"verify" && argumentCount == 3)
+        result = verifyWaveFile(arguments[2]) ? 0 : 30;
+    else if (command == L"dialog" && argumentCount == 4)
+        result = automateDialog(arguments[2], arguments[3]);
     LocalFree(arguments);
-
-    if (command == L"capture")
-        return captureClipboardWave(path);
-    if (command == L"publish")
-        return publishClipboardWave(path);
-    if (command == L"verify")
-        return verifyWaveFile(path);
-    return 3;
+    return result;
 }

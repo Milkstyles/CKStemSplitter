@@ -1,5 +1,5 @@
 #define MyAppName "CK Stem Splitter"
-#define MyAppVersion "0.7.0"
+#define MyAppVersion "0.8.0"
 #define MyAppPublisher "Commercial Kings"
 #define MyAppURL "https://commercialkings.com"
 
@@ -10,7 +10,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
-DefaultDirName={autopf}\Common Files\VST3
+DefaultDirName={commonappdata}\Commercial Kings\CK Stem Splitter
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 OutputDir=..\dist
@@ -25,7 +25,6 @@ CreateUninstallRegKey=yes
 SetupLogging=yes
 
 [Files]
-Source: "..\staging\CK Stem Splitter.vst3\*"; DestDir: "{app}\CK Stem Splitter.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\engine\ckstem-engine\*"; DestDir: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine\ckstem-engine"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\engine\models\*"; DestDir: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine\models"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\audition-extension\*"; DestDir: "{commoncf32}\Adobe\CEP\extensions\com.commercialkings.ckstemsplitter"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -33,6 +32,11 @@ Source: "..\staging\bridge\CKStemBridge.exe"; DestDir: "{commoncf32}\Adobe\CEP\e
 
 [Dirs]
 Name: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine"
+
+[InstallDelete]
+; v0.7's optional VST3 crashed Audition 26.3. The offline panel is the
+; supported workflow, so remove the unsafe effect during upgrade.
+Type: filesandordirs; Name: "{commoncf64}\VST3\CK Stem Splitter.vst3"
 
 [Registry]
 ; Audition still hosts CEP panels. The beta is installed unpacked, so enable local

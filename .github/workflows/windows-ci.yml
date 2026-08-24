@@ -27,24 +27,13 @@ jobs:
           python --version
           Get-ChildItem 'C:\Program Files\Microsoft Visual Studio' -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
 
-      - name: Configure VST3
+      - name: Configure Windows build
         shell: pwsh
         run: cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 
-      - name: Build VST3 and Audition bridge
+      - name: Build Audition bridge
         shell: pwsh
-        run: cmake --build build --config Release --target CKStemSplitter_VST3 CKStemBridge --parallel
-
-      - name: Stage VST3
-        shell: pwsh
-        run: |
-          $src = Join-Path $PWD "build\CKStemSplitter_artefacts\Release\VST3\CK Stem Splitter.vst3"
-          if (!(Test-Path $src)) {
-            Get-ChildItem -Path build -Recurse -Filter "*.vst3" | ForEach-Object { Write-Host $_.FullName }
-            throw "VST3 build output was not found."
-          }
-          New-Item -ItemType Directory -Force -Path staging | Out-Null
-          Copy-Item -Path $src -Destination staging -Recurse -Force
+        run: cmake --build build --config Release --target CKStemBridge --parallel
 
       - name: Stage and verify Audition offline panel
         shell: pwsh
@@ -53,8 +42,9 @@ jobs:
           if (!(Test-Path $bridge)) {
             $bridge = Get-ChildItem -Path build -Recurse -Filter "CKStemBridge.exe" | Select-Object -First 1 -ExpandProperty FullName
           }
-          if (!(Test-Path $bridge)) { throw "Audition clipboard bridge was not built." }
+          if (!(Test-Path $bridge)) { throw "Audition selection bridge was not built." }
 
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
           Copy-Item audition-extension staging\audition-extension -Recurse -Force
           New-Item -ItemType Directory -Force -Path staging\bridge | Out-Null
           Copy-Item $bridge staging\bridge\CKStemBridge.exe -Force
@@ -64,6 +54,12 @@ jobs:
           if ($auditionHost.Name -ne "AUDT") { throw "CEP panel does not target Adobe Audition." }
           if (!(Select-String -Path staging\audition-extension\jsx\host.jsx -Pattern "app.invokeCommand" -Quiet)) {
             throw "Audition panel is missing host command integration."
+          }
+          if (!(Select-String -Path staging\audition-extension\main.js -Pattern "saveselectionas" -Quiet)) {
+            throw "Audition panel is missing selection export integration."
+          }
+          if (Select-String -Path staging\audition-extension\main.js -Pattern "clipboard" -Quiet) {
+            throw "Obsolete Windows clipboard workflow is still present."
           }
 
       - name: Install engine build dependencies
@@ -137,7 +133,7 @@ jobs:
           '@ | python -
 
           & staging\bridge\CKStemBridge.exe verify build\smoke-in\test.wav
-          if ($LASTEXITCODE -ne 0) { throw "Clipboard bridge rejected the smoke-test WAV." }
+          if ($LASTEXITCODE -ne 0) { throw "Selection bridge rejected the smoke-test WAV." }
 
       - name: Smoke test real stem separation
         shell: pwsh
