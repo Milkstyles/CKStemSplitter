@@ -91,15 +91,7 @@ void CKStemSplitterAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         const juce::SpinLock::ScopedTryLockType lock(captureWriterLock);
         if (lock.isLocked() && captureWriter != nullptr)
         {
-            const auto channelsToWrite = juce::jmin(captureChannels, buffer.getNumChannels());
-            const float* channelData[2] { nullptr, nullptr };
-            for (int ch = 0; ch < channelsToWrite && ch < 2; ++ch)
-                channelData[ch] = buffer.getReadPointer(ch);
-
-            if (channelsToWrite == 1)
-                channelData[1] = channelData[0];
-
-            if (captureWriter->write(channelData, buffer.getNumSamples()))
+            if (captureWriter->writeFromAudioSampleBuffer(buffer, 0, buffer.getNumSamples()))
             {
                 capturedSamples.fetch_add(buffer.getNumSamples());
                 lastCaptureActivityTicks.store(juce::Time::getHighResolutionTicks());
