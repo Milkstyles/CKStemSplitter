@@ -55,7 +55,7 @@ void StemEngine::setSourceFile(const juce::File& file)
     sourceFile = file;
     progress.store(0.0f);
     clearStemSources();
-    status = "Ready to split: " + file.getFileName();
+    status = "Ready to split captured selection";
 }
 
 juce::File StemEngine::getSourceFile() const
@@ -114,7 +114,7 @@ void StemEngine::startSeparation()
     {
         busy.store(false);
         std::scoped_lock lock(stateMutex);
-        status = "Choose an audio file first";
+        status = "Capture an Audition selection first";
         return;
     }
 
@@ -292,9 +292,11 @@ bool StemEngine::loadCachedStems(const juce::File& vocalsFile, const juce::File&
         instrumentalTransport.setSource(instrumentalReaderSource.get(), readAheadSamples, &readAheadThread, stemSampleRate, 2);
         vocalsTransport.prepareToPlay(currentBlockSize, currentSampleRate);
         instrumentalTransport.prepareToPlay(currentBlockSize, currentSampleRate);
+        vocalsTransport.setPosition(0.0);
+        instrumentalTransport.setPosition(0.0);
         vocalsTransport.start();
         instrumentalTransport.start();
-        status = "Stems ready - choose Vocals or Instrumental";
+        status = "Stems ready - choose Vocals or Instrumental, then click Audition Apply";
     }
 
     stemsReady.store(true);
@@ -306,7 +308,7 @@ void StemEngine::process(juce::AudioBuffer<float>& buffer, StemMode mode, juce::
     if (mode == StemMode::original)
         return;
 
-    if (!stemsReady.load() || hostSamplePosition < 0 || currentSampleRate <= 0.0)
+    if (!stemsReady.load() || currentSampleRate <= 0.0)
     {
         buffer.clear();
         return;
@@ -320,12 +322,22 @@ void StemEngine::process(juce::AudioBuffer<float>& buffer, StemMode mode, juce::
     }
 
     auto& transport = (mode == StemMode::vocals) ? vocalsTransport : instrumentalTransport;
-    const double targetSeconds = static_cast<double>(hostSamplePosition) / currentSampleRate;
-    const double driftSeconds = std::abs(transport.getCurrentPosition() - targetSeconds);
 
-    const double blockSeconds = static_cast<double>(buffer.getNumSamples()) / currentSampleRate;
-    if (driftSeconds > juce::jmax(0.050, blockSeconds * 4.0))
-        transport.setPosition(targetSeconds);
+    if (hostSamplePosition >= 0)
+    {
+        const auto relativeSample = hostSamplePosition - timelineOffsetSamples.load();
+        if (relativeSample < 0)
+        {
+            buffer.clear();
+            return;
+        }
+
+        const double targetSeconds = static_cast<double>(relativeSample) / currentSampleRate;
+        const double driftSeconds = std::abs(transport.getCurrentPosition() - targetSeconds);
+        const double blockSeconds = static_cast<double>(buffer.getNumSamples()) / currentSampleRate;
+        if (driftSeconds > juce::jmax(0.050, blockSeconds * 4.0))
+            transport.setPosition(targetSeconds);
+    }
 
     juce::AudioSourceChannelInfo info(&buffer, 0, buffer.getNumSamples());
     transport.getNextAudioBlock(info);
