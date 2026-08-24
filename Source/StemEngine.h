@@ -28,6 +28,7 @@ public:
     void setTimelineOffsetSamples(juce::int64 offsetSamples) noexcept { timelineOffsetSamples.store(offsetSamples); }
 
     void startSeparation();
+    bool loadPreparedStems(const juce::File& vocalsFile, const juce::File& instrumentalFile);
     bool isBusy() const noexcept { return busy.load(); }
     bool hasSeparatedStems() const noexcept { return stemsReady.load(); }
     float getProgress() const noexcept { return progress.load(); }

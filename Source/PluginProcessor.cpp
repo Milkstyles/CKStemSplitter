@@ -300,14 +300,23 @@ void CKStemSplitterAudioProcessor::checkAutomationRequestFromUi()
 
     const auto lines = juce::StringArray::fromLines(requestFile.loadFileAsString());
     requestFile.deleteFile();
-    if (lines.size() < 2)
+    if (lines.size() < 6)
         return;
 
     automationRequestId = lines[0].trim();
     const auto requestedMode = lines[1].trim().equalsIgnoreCase("instrumental") ? 2 : 1;
+    const juce::File scanFile(lines[2].trim());
+    const auto timelineOffset = lines[3].trim().getLargeIntValue();
+    const juce::File vocalsFile(lines[4].trim());
+    const juce::File instrumentalFile(lines[5].trim());
     if (auto* mode = apvts.getParameter("mode"))
         mode->setValueNotifyingHost(requestedMode == 1 ? 0.5f : 1.0f);
-    restoreLastScanFromUi();
+    capturedSelectionFile = scanFile;
+    stemEngine.setTimelineOffsetSamples(juce::jmax<juce::int64>(0, timelineOffset));
+    stemEngine.setSourceFile(scanFile);
+    setCaptureStatus("Loading finished stems from the companion...");
+    if (!stemEngine.loadPreparedStems(vocalsFile, instrumentalFile))
+        automationRequestId.clear();
 }
 
 void CKStemSplitterAudioProcessor::publishAutomationReadyFromUi()

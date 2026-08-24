@@ -133,6 +133,15 @@ void StemEngine::startSeparation()
     workerThread = std::thread([this] { separationWorker(); });
 }
 
+bool StemEngine::loadPreparedStems(const juce::File& vocalsFile, const juce::File& instrumentalFile)
+{
+    progress.store(0.9f);
+    const auto loaded = loadCachedStems(vocalsFile, instrumentalFile);
+    progress.store(loaded ? 1.0f : 0.0f);
+    busy.store(false);
+    return loaded;
+}
+
 void StemEngine::separationWorker()
 {
     juce::File localSource;

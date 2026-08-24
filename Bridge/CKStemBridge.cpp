@@ -144,6 +144,56 @@ std::wstring readTextFile(const std::filesystem::path& path)
     return { std::istreambuf_iterator<wchar_t>(input), std::istreambuf_iterator<wchar_t>() };
 }
 
+std::vector<std::wstring> splitLines(const std::wstring& text)
+{
+    std::vector<std::wstring> lines;
+    std::wstring current;
+    for (const auto character : text)
+    {
+        if (character == L'\r') continue;
+        if (character == L'\n')
+        {
+            lines.push_back(current);
+            current.clear();
+        }
+        else current.push_back(character);
+    }
+    if (!current.empty()) lines.push_back(current);
+    return lines;
+}
+
+bool runStemEngine(const std::filesystem::path& source,
+                   const std::filesystem::path& outputDirectory)
+{
+    const wchar_t* programData = _wgetenv(L"PROGRAMDATA");
+    if (programData == nullptr) return false;
+    const auto root = std::filesystem::path(programData) / L"Commercial Kings" / L"CK Stem Splitter";
+    const auto engine = root / L"engine" / L"ckstem-engine" / L"ckstem-engine.exe";
+    const auto models = root / L"engine" / L"models";
+    if (!std::filesystem::is_regular_file(engine)) return false;
+    std::filesystem::create_directories(outputDirectory);
+
+    std::wstring command = L"\"" + engine.wstring() + L"\" separate \"" + source.wstring()
+        + L"\" \"" + outputDirectory.wstring()
+        + L"\" --model htdemucs_ft_vocals --small --providers auto --cache-dir \""
+        + models.wstring() + L"\" --karaoke --quiet";
+    std::vector<wchar_t> mutableCommand(command.begin(), command.end());
+    mutableCommand.push_back(L'\0');
+
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE,
+                        CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process))
+        return false;
+    WaitForSingleObject(process.hProcess, 15 * 60 * 1000);
+    DWORD exitCode = 1;
+    GetExitCodeProcess(process.hProcess, &exitCode);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return exitCode == 0;
+}
+
 bool waitForChangedState(const std::filesystem::path& stateFile,
                          const std::wstring& previous,
                          Clock::time_point deadline)
@@ -202,10 +252,28 @@ int orchestrate(const std::wstring& mode, const std::wstring& requestId)
     while (Clock::now() < closeDeadline && IsWindow(firstEffect) && IsWindowVisible(firstEffect))
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+    const auto stateLines = splitLines(readTextFile(stateFile));
+    if (stateLines.size() < 2) return 57;
+    const auto sourceFile = std::filesystem::path(stateLines[0]);
+    const auto outputDirectory = stateDir / L"Automation" / requestId;
+    if (!runStemEngine(sourceFile, outputDirectory)) return 58;
+    const auto vocalsFile = outputDirectory / L"vocals.wav";
+    auto instrumentalFile = outputDirectory / L"instrumental.wav";
+    const auto karaokeFile = outputDirectory / L"karaoke.wav";
+    if (!std::filesystem::is_regular_file(instrumentalFile) && std::filesystem::is_regular_file(karaokeFile))
+    {
+        std::error_code error;
+        std::filesystem::rename(karaokeFile, instrumentalFile, error);
+        if (error) return 59;
+    }
+    if (!std::filesystem::is_regular_file(vocalsFile) || !std::filesystem::is_regular_file(instrumentalFile)) return 60;
+
     const auto processFile = stateDir / L"automation-process.txt";
     {
         std::wofstream output(processFile, std::ios::trunc);
-        output << requestId << L"\n" << mode << L"\n";
+        output << requestId << L"\n" << mode << L"\n"
+               << sourceFile.wstring() << L"\n" << stateLines[1] << L"\n"
+               << vocalsFile.wstring() << L"\n" << instrumentalFile.wstring() << L"\n";
     }
     if (!sendRepeatWithoutApply()) return 53;
 
