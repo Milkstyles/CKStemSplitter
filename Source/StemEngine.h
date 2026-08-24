@@ -56,6 +56,8 @@ private:
     int currentBlockSize = 512;
     int currentChannels = 2;
     std::atomic<juce::int64> timelineOffsetSamples { 0 };
+    std::atomic<juce::int64> expectedHostSamplePosition { -1 };
+    std::atomic<int> lastRenderedMode { -1 };
 
     std::atomic<bool> busy { false };
     std::atomic<bool> stemsReady { false };
