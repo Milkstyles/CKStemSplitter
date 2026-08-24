@@ -2,8 +2,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class CKStemSplitterAudioProcessorEditor : public juce::AudioProcessorEditor,
-                                           private juce::Timer
+class CKStemSplitterAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit CKStemSplitterAudioProcessorEditor(CKStemSplitterAudioProcessor&);
@@ -13,8 +12,6 @@ public:
     void resized() override;
 
 private:
-    void timerCallback() override;
-
     CKStemSplitterAudioProcessor& processor;
 
     juce::Label titleLabel;
@@ -22,13 +19,13 @@ private:
     juce::Label instructionLabel;
     juce::TextButton captureButton { "MAKE ACAPELLA" };
     juce::TextButton stopSplitButton { "MAKE INSTRUMENTAL" };
+    juce::TextButton loadPreparedButton { "LOAD PREPARED STEM" };
     juce::ComboBox modeBox;
     juce::Slider outputGainSlider;
     juce::Label outputGainLabel;
     juce::ProgressBar progressBar;
     double progressValue = 0.0;
     juce::Label statusLabel;
-    bool checkedAutomationRequest = false;
 
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;

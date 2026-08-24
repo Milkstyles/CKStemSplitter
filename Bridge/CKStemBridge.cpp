@@ -112,6 +112,48 @@ bool clickEffectApply(HWND effectWindow)
     return true;
 }
 
+struct PluginChildSearch
+{
+    HWND window = nullptr;
+    long bestDifference = LONG_MAX;
+};
+
+BOOL CALLBACK findPluginChild(HWND child, LPARAM parameter)
+{
+    auto* result = reinterpret_cast<PluginChildSearch*>(parameter);
+    if (!IsWindowVisible(child)) return TRUE;
+    RECT rect{};
+    GetClientRect(child, &rect);
+    const auto width = rect.right - rect.left;
+    const auto height = rect.bottom - rect.top;
+    if (width < 580 || height < 380) return TRUE;
+    const auto difference = std::labs(width - 620) + std::labs(height - 430);
+    if (difference < result->bestDifference)
+    {
+        result->window = child;
+        result->bestDifference = difference;
+    }
+    return TRUE;
+}
+
+bool clickPreparedStemControl(HWND effectWindow)
+{
+    PluginChildSearch search;
+    EnumChildWindows(effectWindow, findPluginChild, reinterpret_cast<LPARAM>(&search));
+    HWND target = search.window != nullptr ? search.window : effectWindow;
+    RECT rect{};
+    GetClientRect(target, &rect);
+    const auto width = rect.right - rect.left;
+    const auto height = rect.bottom - rect.top;
+    if (width <= 0 || height <= 0) return false;
+    const auto x = width / 2;
+    const auto y = search.window != nullptr ? 235 : std::min(height - 100L, 290L);
+    const auto point = MAKELPARAM(x, y);
+    SendMessageW(target, WM_LBUTTONDOWN, MK_LBUTTON, point);
+    SendMessageW(target, WM_LBUTTONUP, 0, point);
+    return true;
+}
+
 struct MainWindowSearch { HWND window = nullptr; };
 
 BOOL CALLBACK findMainAuditionWindow(HWND window, LPARAM parameter)
@@ -290,6 +332,7 @@ int orchestrate(const std::wstring& mode, const std::wstring& requestId)
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     if (secondEffect == nullptr) return 54;
+    if (!clickPreparedStemControl(secondEffect)) return 61;
 
     const auto readyFile = stateDir / L"automation-ready.txt";
     const auto readyDeadline = Clock::now() + std::chrono::minutes(15);

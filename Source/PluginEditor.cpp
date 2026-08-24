@@ -34,6 +34,13 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     };
     addAndMakeVisible(stopSplitButton);
 
+    loadPreparedButton.onClick = [this]
+    {
+        processor.checkAutomationRequestFromUi();
+        processor.publishAutomationReadyFromUi();
+    };
+    addAndMakeVisible(loadPreparedButton);
+
     modeBox.addItem("Original", 1);
     modeBox.addItem("Acapella", 2);
     modeBox.addItem("Instrumental", 3);
@@ -59,7 +66,6 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     modeAttachment = std::make_unique<ComboAttachment>(processor.getAPVTS(), "mode", modeBox);
     gainAttachment = std::make_unique<SliderAttachment>(processor.getAPVTS(), "outputGain", outputGainSlider);
 
-    startTimerHz(12);
 }
 
 void CKStemSplitterAudioProcessorEditor::paint(juce::Graphics& g)
@@ -89,42 +95,12 @@ void CKStemSplitterAudioProcessorEditor::resized()
     captureButton.setBounds(55, 158, 240, 40);
     stopSplitButton.setBounds(325, 158, 240, 40);
 
-    modeBox.setBounds(55, 225, 300, 38);
+    loadPreparedButton.setBounds(55, 215, 510, 40);
+    modeBox.setBounds(55, 270, 300, 38);
 
-    outputGainLabel.setBounds(425, 212, 120, 22);
-    outputGainSlider.setBounds(430, 235, 110, 105);
+    outputGainLabel.setBounds(425, 257, 120, 22);
+    outputGainSlider.setBounds(430, 280, 110, 80);
 
-    progressBar.setBounds(55, 295, 300, 22);
-    statusLabel.setBounds(45, 342, 530, 42);
-}
-
-void CKStemSplitterAudioProcessorEditor::timerCallback()
-{
-    if (!checkedAutomationRequest)
-    {
-        checkedAutomationRequest = true;
-        processor.checkAutomationRequestFromUi();
-    }
-
-    auto& engine = processor.getStemEngine();
-    progressValue = engine.getProgress();
-
-    const bool capturing = processor.isCapturingSelection();
-    const bool busy = engine.isBusy();
-
-    if (busy || engine.hasSeparatedStems())
-        statusLabel.setText(engine.getStatus(), juce::dontSendNotification);
-    else
-        statusLabel.setText(processor.getCaptureStatus(), juce::dontSendNotification);
-
-    captureButton.setEnabled(!busy && !capturing);
-    stopSplitButton.setEnabled(!busy && !capturing);
-    modeBox.setEnabled(!busy);
-
-    captureButton.setButtonText(capturing ? "WORKING..." : "MAKE ACAPELLA");
-    stopSplitButton.setButtonText(capturing ? "WORKING..." : "MAKE INSTRUMENTAL");
-
-    processor.publishAutomationReadyFromUi();
-
-    repaint();
+    progressBar.setBounds(55, 325, 300, 22);
+    statusLabel.setBounds(45, 365, 530, 42);
 }
