@@ -24,6 +24,8 @@ void StemEngine::prepare(double sampleRate, int samplesPerBlock, int channels)
     currentSampleRate = sampleRate;
     currentBlockSize = samplesPerBlock;
     currentChannels = channels;
+    expectedHostSamplePosition.store(-1);
+    lastRenderedMode.store(-1);
 
     std::scoped_lock lock(stateMutex);
     vocalsTransport.prepareToPlay(samplesPerBlock, sampleRate);
@@ -32,7 +34,8 @@ void StemEngine::prepare(double sampleRate, int samplesPerBlock, int channels)
 
 void StemEngine::reset()
 {
-    // Keep cached stems and transport sources ready between playback starts/stops.
+    expectedHostSamplePosition.store(-1);
+    lastRenderedMode.store(-1);
 }
 
 void StemEngine::clearStemSources()
@@ -43,6 +46,8 @@ void StemEngine::clearStemSources()
     instrumentalTransport.setSource(nullptr);
     vocalsReaderSource.reset();
     instrumentalReaderSource.reset();
+    expectedHostSamplePosition.store(-1);
+    lastRenderedMode.store(-1);
 }
 
 void StemEngine::setSourceFile(const juce::File& file)
@@ -296,6 +301,8 @@ bool StemEngine::loadCachedStems(const juce::File& vocalsFile, const juce::File&
         instrumentalTransport.setPosition(0.0);
         vocalsTransport.start();
         instrumentalTransport.start();
+        expectedHostSamplePosition.store(-1);
+        lastRenderedMode.store(-1);
         status = "Stems ready - choose Vocals or Instrumental, then click Audition Apply";
     }
 
@@ -305,12 +312,18 @@ bool StemEngine::loadCachedStems(const juce::File& vocalsFile, const juce::File&
 
 void StemEngine::process(juce::AudioBuffer<float>& buffer, StemMode mode, juce::int64 hostSamplePosition)
 {
+    const auto modeIndex = static_cast<int>(mode);
     if (mode == StemMode::original)
+    {
+        expectedHostSamplePosition.store(-1);
+        lastRenderedMode.store(modeIndex);
         return;
+    }
 
     if (!stemsReady.load() || currentSampleRate <= 0.0)
     {
         buffer.clear();
+        expectedHostSamplePosition.store(-1);
         return;
     }
 
@@ -329,14 +342,29 @@ void StemEngine::process(juce::AudioBuffer<float>& buffer, StemMode mode, juce::
         if (relativeSample < 0)
         {
             buffer.clear();
+            expectedHostSamplePosition.store(-1);
+            lastRenderedMode.store(modeIndex);
             return;
         }
 
-        const double targetSeconds = static_cast<double>(relativeSample) / currentSampleRate;
-        const double driftSeconds = std::abs(transport.getCurrentPosition() - targetSeconds);
-        const double blockSeconds = static_cast<double>(buffer.getNumSamples()) / currentSampleRate;
-        if (driftSeconds > juce::jmax(0.050, blockSeconds * 4.0))
+        const auto expected = expectedHostSamplePosition.load();
+        const auto modeChanged = lastRenderedMode.load() != modeIndex;
+        const auto toleranceSamples = static_cast<juce::int64>(juce::jmax(buffer.getNumSamples() * 2, 2048));
+        const auto hostJumped = expected < 0 || std::llabs(hostSamplePosition - expected) > toleranceSamples;
+
+        if (modeChanged || hostJumped)
+        {
+            const double targetSeconds = static_cast<double>(relativeSample) / currentSampleRate;
             transport.setPosition(targetSeconds);
+        }
+
+        expectedHostSamplePosition.store(hostSamplePosition + buffer.getNumSamples());
+        lastRenderedMode.store(modeIndex);
+    }
+    else
+    {
+        expectedHostSamplePosition.store(-1);
+        lastRenderedMode.store(modeIndex);
     }
 
     juce::AudioSourceChannelInfo info(&buffer, 0, buffer.getNumSamples());
