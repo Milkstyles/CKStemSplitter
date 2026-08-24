@@ -58,7 +58,7 @@ jobs:
           if (!(Select-String -Path Source\PluginProcessor.cpp -Pattern "lastCaptureActivityTicks" -Quiet)) {
             throw "VST3 is missing automatic offline scan completion."
           }
-          if (!(Select-String -Path Source\PluginEditor.cpp -Pattern "MAKE ACAPELLA" -Quiet)) {
+          if (!(Select-String -Path Source\PluginEditor.h -Pattern "MAKE ACAPELLA" -Quiet)) {
             throw "VST3 is missing the one-click stem workflow UI."
           }
           if (!(Select-String -Path Source\PluginProcessor.cpp -Pattern "restoreLastScanState" -Quiet)) {
