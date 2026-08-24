@@ -15,7 +15,7 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     subtitleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(subtitleLabel);
 
-    instructionLabel.setText("1. SCAN + Audition Apply   2. Choose stem   3. Audition Apply again",
+    instructionLabel.setText("1. SCAN + Apply   2. Reopen + CONTINUE   3. Choose stem + Apply",
                              juce::dontSendNotification);
     instructionLabel.setFont(juce::Font(12.0f));
     instructionLabel.setJustificationType(juce::Justification::centred);
@@ -33,6 +33,12 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
         processor.stopSelectionCaptureAndSplit();
     };
     addAndMakeVisible(stopSplitButton);
+
+    continueButton.onClick = [this]
+    {
+        processor.restoreLastScanFromUi();
+    };
+    addAndMakeVisible(continueButton);
 
     modeBox.addItem("Original", 1);
     modeBox.addItem("Acapella", 2);
@@ -89,23 +95,19 @@ void CKStemSplitterAudioProcessorEditor::resized()
     captureButton.setBounds(55, 158, 240, 40);
     stopSplitButton.setBounds(325, 158, 240, 40);
 
-    modeBox.setBounds(55, 225, 300, 38);
+    continueButton.setBounds(55, 215, 510, 36);
 
-    outputGainLabel.setBounds(425, 212, 120, 22);
-    outputGainSlider.setBounds(430, 235, 110, 105);
+    modeBox.setBounds(55, 265, 300, 38);
 
-    progressBar.setBounds(55, 295, 300, 22);
-    statusLabel.setBounds(45, 342, 530, 42);
+    outputGainLabel.setBounds(425, 252, 120, 22);
+    outputGainSlider.setBounds(430, 275, 110, 85);
+
+    progressBar.setBounds(55, 325, 300, 22);
+    statusLabel.setBounds(45, 365, 530, 42);
 }
 
 void CKStemSplitterAudioProcessorEditor::timerCallback()
 {
-    if (!attemptedScanRestore)
-    {
-        attemptedScanRestore = true;
-        processor.restoreLastScanFromUi();
-    }
-
     auto& engine = processor.getStemEngine();
     progressValue = engine.getProgress();
 
@@ -119,6 +121,7 @@ void CKStemSplitterAudioProcessorEditor::timerCallback()
 
     captureButton.setEnabled(!busy && !capturing);
     stopSplitButton.setEnabled(capturing);
+    continueButton.setEnabled(!busy && !capturing && !engine.hasSeparatedStems());
     modeBox.setEnabled(!busy);
 
     if (capturing)

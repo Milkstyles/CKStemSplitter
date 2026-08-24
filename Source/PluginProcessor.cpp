@@ -18,12 +18,10 @@ CKStemSplitterAudioProcessor::CKStemSplitterAudioProcessor()
         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
-    startTimerHz(10);
 }
 
 CKStemSplitterAudioProcessor::~CKStemSplitterAudioProcessor()
 {
-    stopTimer();
     capturingSelection.store(false);
     {
         const juce::SpinLock::ScopedLockType lock(captureWriterLock);
@@ -168,21 +166,6 @@ bool CKStemSplitterAudioProcessor::startSelectionCapture()
     capturingSelection.store(true);
     setCaptureStatus("SCAN ARMED - click Audition Apply once; playback is not required");
     return true;
-}
-
-void CKStemSplitterAudioProcessor::timerCallback()
-{
-    if (!capturingSelection.load() || capturedSamples.load() == 0)
-        return;
-
-    const auto lastTicks = lastCaptureActivityTicks.load();
-    if (lastTicks <= 0)
-        return;
-
-    const auto elapsed = juce::Time::highResolutionTicksToSeconds(
-        juce::Time::getHighResolutionTicks() - lastTicks);
-    if (elapsed >= 0.65)
-        stopSelectionCaptureAndSplit();
 }
 
 void CKStemSplitterAudioProcessor::stopSelectionCaptureAndSplit()

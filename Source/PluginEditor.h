@@ -22,13 +22,13 @@ private:
     juce::Label instructionLabel;
     juce::TextButton captureButton { "SCAN SELECTION" };
     juce::TextButton stopSplitButton { "FINISH SCAN" };
+    juce::TextButton continueButton { "CONTINUE LAST SCAN" };
     juce::ComboBox modeBox;
     juce::Slider outputGainSlider;
     juce::Label outputGainLabel;
     juce::ProgressBar progressBar;
     double progressValue = 0.0;
     juce::Label statusLabel;
-    bool attemptedScanRestore = false;
 
     using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;

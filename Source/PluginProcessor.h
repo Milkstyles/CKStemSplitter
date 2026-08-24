@@ -2,8 +2,7 @@
 #include <JuceHeader.h>
 #include "StemEngine.h"
 
-class CKStemSplitterAudioProcessor : public juce::AudioProcessor,
-                                      private juce::Timer
+class CKStemSplitterAudioProcessor : public juce::AudioProcessor
 {
 public:
     CKStemSplitterAudioProcessor();
@@ -45,7 +44,6 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
-    void timerCallback() override;
     void setCaptureStatus(const juce::String& newStatus);
     void saveLastScanState(juce::int64 timelineOffset);
     void restoreLastScanState();
