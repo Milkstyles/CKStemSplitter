@@ -6,7 +6,7 @@ class CKStemSplitterAudioProcessor : public juce::AudioProcessor
 {
 public:
     CKStemSplitterAudioProcessor();
-    ~CKStemSplitterAudioProcessor() override = default;
+    ~CKStemSplitterAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -34,11 +34,32 @@ public:
     juce::AudioProcessorValueTreeState& getAPVTS() noexcept { return apvts; }
     StemEngine& getStemEngine() noexcept { return stemEngine; }
 
+    bool startSelectionCapture();
+    void stopSelectionCaptureAndSplit();
+    bool isCapturingSelection() const noexcept { return capturingSelection.load(); }
+    juce::int64 getCapturedSamples() const noexcept { return capturedSamples.load(); }
+    juce::String getCaptureStatus() const;
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
+    void setCaptureStatus(const juce::String& newStatus);
+
     juce::AudioProcessorValueTreeState apvts;
     StemEngine stemEngine;
+
+    juce::TimeSliceThread captureWriterThread { "CK Selection Capture Writer" };
+    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> captureWriter;
+    juce::SpinLock captureWriterLock;
+    juce::File capturedSelectionFile;
+    std::atomic<bool> capturingSelection { false };
+    std::atomic<juce::int64> capturedSamples { 0 };
+    std::atomic<juce::int64> captureStartHostSample { -1 };
+    double captureSampleRate = 44100.0;
+    int captureChannels = 2;
+
+    mutable juce::CriticalSection captureStatusLock;
+    juce::String captureStatus { "Highlight audio, click CAPTURE SELECTION, then preview it in Audition" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CKStemSplitterAudioProcessor)
 };
