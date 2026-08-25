@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <shellapi.h>
+#include <UIAutomation.h>
 
 #include <algorithm>
 #include <chrono>
@@ -307,20 +308,126 @@ bool waitForChangedState(const std::filesystem::path& stateFile,
     return false;
 }
 
-bool sendRepeatWithoutApply()
+template <typename T>
+void releaseCom(T*& pointer)
+{
+    if (pointer != nullptr)
+    {
+        pointer->Release();
+        pointer = nullptr;
+    }
+}
+
+IUIAutomationElement* findMenuItem(IUIAutomation* automation,
+                                   IUIAutomationElement* root,
+                                   const wchar_t* name)
+{
+    VARIANT nameValue{};
+    nameValue.vt = VT_BSTR;
+    nameValue.bstrVal = SysAllocString(name);
+    IUIAutomationCondition* nameCondition = nullptr;
+    automation->CreatePropertyCondition(UIA_NamePropertyId, nameValue, &nameCondition);
+    VariantClear(&nameValue);
+
+    VARIANT typeValue{};
+    typeValue.vt = VT_I4;
+    typeValue.lVal = UIA_MenuItemControlTypeId;
+    IUIAutomationCondition* typeCondition = nullptr;
+    automation->CreatePropertyCondition(UIA_ControlTypePropertyId, typeValue, &typeCondition);
+
+    IUIAutomationCondition* combined = nullptr;
+    if (nameCondition != nullptr && typeCondition != nullptr)
+        automation->CreateAndCondition(nameCondition, typeCondition, &combined);
+
+    IUIAutomationElement* result = nullptr;
+    if (combined != nullptr)
+        root->FindFirst(TreeScope_Subtree, combined, &result);
+    releaseCom(combined);
+    releaseCom(typeCondition);
+    releaseCom(nameCondition);
+    return result;
+}
+
+bool activateMenuItem(IUIAutomationElement* element)
+{
+    if (element == nullptr) return false;
+    IUIAutomationInvokePattern* invoke = nullptr;
+    if (SUCCEEDED(element->GetCurrentPatternAs(UIA_InvokePatternId, IID_PPV_ARGS(&invoke))) && invoke != nullptr)
+    {
+        const auto result = SUCCEEDED(invoke->Invoke());
+        releaseCom(invoke);
+        return result;
+    }
+
+    IUIAutomationExpandCollapsePattern* expand = nullptr;
+    if (SUCCEEDED(element->GetCurrentPatternAs(UIA_ExpandCollapsePatternId, IID_PPV_ARGS(&expand))) && expand != nullptr)
+    {
+        const auto result = SUCCEEDED(expand->Expand());
+        releaseCom(expand);
+        return result;
+    }
+
+    IUIAutomationLegacyIAccessiblePattern* legacy = nullptr;
+    if (SUCCEEDED(element->GetCurrentPatternAs(UIA_LegacyIAccessiblePatternId, IID_PPV_ARGS(&legacy))) && legacy != nullptr)
+    {
+        const auto result = SUCCEEDED(legacy->DoDefaultAction());
+        releaseCom(legacy);
+        return result;
+    }
+    return false;
+}
+
+bool openExactStemEffect()
 {
     MainWindowSearch main;
     EnumWindows(findMainAuditionWindow, reinterpret_cast<LPARAM>(&main));
     if (main.window == nullptr) return false;
     SetForegroundWindow(main.window);
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    BringWindowToTop(main.window);
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
-    INPUT inputs[4]{};
-    inputs[0].type = INPUT_KEYBOARD; inputs[0].ki.wVk = VK_CONTROL;
-    inputs[1].type = INPUT_KEYBOARD; inputs[1].ki.wVk = 'R';
-    inputs[2].type = INPUT_KEYBOARD; inputs[2].ki.wVk = 'R'; inputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
-    inputs[3].type = INPUT_KEYBOARD; inputs[3].ki.wVk = VK_CONTROL; inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
-    return SendInput(4, inputs, sizeof(INPUT)) == 4;
+    const auto comResult = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const auto uninitialise = SUCCEEDED(comResult);
+    IUIAutomation* automation = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&automation))) || automation == nullptr)
+    {
+        if (uninitialise) CoUninitialize();
+        return false;
+    }
+
+    IUIAutomationElement* desktop = nullptr;
+    IUIAutomationElement* audition = nullptr;
+    automation->GetRootElement(&desktop);
+    automation->ElementFromHandle(main.window, &audition);
+    if (desktop == nullptr || audition == nullptr)
+    {
+        releaseCom(audition);
+        releaseCom(desktop);
+        releaseCom(automation);
+        if (uninitialise) CoUninitialize();
+        return false;
+    }
+
+    const wchar_t* path[] = { L"Effects", L"VST3", L"Commercial Kings", L"CK Stem Splitter" };
+    bool opened = true;
+    for (int index = 0; index < 4 && opened; ++index)
+    {
+        auto* searchRoot = index == 0 ? audition : desktop;
+        auto* item = findMenuItem(automation, searchRoot, path[index]);
+        if (item == nullptr && index == 1)
+            item = findMenuItem(automation, searchRoot, L"VST 3");
+        opened = activateMenuItem(item);
+        releaseCom(item);
+        if (opened)
+            std::this_thread::sleep_for(std::chrono::milliseconds(350));
+    }
+
+    releaseCom(audition);
+    releaseCom(desktop);
+    releaseCom(automation);
+    if (uninitialise) CoUninitialize();
+    return opened;
 }
 
 int orchestrate(const std::wstring& mode, const std::wstring& requestId, HWND suppliedPluginWindow)
@@ -377,8 +484,7 @@ int orchestrate(const std::wstring& mode, const std::wstring& requestId, HWND su
                << sourceFile.wstring() << L"\n" << stateLines[1] << L"\n"
                << vocalsFile.wstring() << L"\n" << instrumentalFile.wstring() << L"\n";
     }
-    if (!sendRepeatWithoutApply()) return 53;
-
+    if (!openExactStemEffect()) return 63;
     HWND secondEffect = nullptr;
     const auto secondDeadline = Clock::now() + std::chrono::seconds(20);
     while (Clock::now() < secondDeadline)

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(CKStemSplitter VERSION 1.0.7)
+project(CKStemSplitter VERSION 1.0.8)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,7 +69,10 @@ if(WIN32)
     )
 
     target_link_libraries(CKStemBridge PRIVATE
+        ole32
+        oleaut32
         shell32
+        uiautomationcore
         user32
     )
 endif()
