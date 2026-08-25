@@ -1,5 +1,5 @@
 #define MyAppName "CK Stem Splitter"
-#define MyAppVersion "1.0.5"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "Commercial Kings"
 #define MyAppURL "https://commercialkings.com"
 
@@ -35,6 +35,8 @@ Name: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine"
 Name: "{commonappdata}\Commercial Kings\CK Stem Splitter\companion"
 
 [InstallDelete]
+Type: files; Name: "{userappdata}\Commercial Kings\CK Stem Splitter\automation-process.txt"
+Type: files; Name: "{userappdata}\Commercial Kings\CK Stem Splitter\automation-ready.txt"
 ; Remove the discontinued CEP export panel so Audition shows one CK interface.
 Type: filesandordirs; Name: "{commoncf32}\Adobe\CEP\extensions\com.commercialkings.ckstemsplitter"
 

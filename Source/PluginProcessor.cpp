@@ -297,6 +297,11 @@ void CKStemSplitterAudioProcessor::loadPreparedAutomationStemFromUi()
     const auto requestFile = getAutomationFile("automation-process.txt");
     if (!requestFile.existsAsFile())
         return;
+    if (requestFile.getLastModificationTime() < juce::Time::getCurrentTime() - juce::RelativeTime::minutes(2.0))
+    {
+        requestFile.deleteFile();
+        return;
+    }
     automationRequestChecked = true;
 
     const auto lines = juce::StringArray::fromLines(requestFile.loadFileAsString());

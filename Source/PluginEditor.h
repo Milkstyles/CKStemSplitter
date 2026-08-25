@@ -19,17 +19,7 @@ private:
     juce::Label instructionLabel;
     juce::TextButton captureButton { "MAKE ACAPELLA" };
     juce::TextButton stopSplitButton { "MAKE INSTRUMENTAL" };
-    juce::ComboBox modeBox;
-    juce::Slider outputGainSlider;
-    juce::Label outputGainLabel;
-    juce::ProgressBar progressBar;
-    double progressValue = 0.0;
     juce::Label statusLabel;
-
-    using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
-    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    std::unique_ptr<ComboAttachment> modeAttachment;
-    std::unique_ptr<SliderAttachment> gainAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CKStemSplitterAudioProcessorEditor)
 };

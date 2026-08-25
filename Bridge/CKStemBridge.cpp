@@ -338,7 +338,9 @@ int orchestrate(const std::wstring& mode, const std::wstring& requestId, HWND su
         firstEffect = currentEffectWindow();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    if (firstEffect == nullptr || !clickEffectApply(firstEffect)) return 51;
+    if (firstEffect == nullptr) return 51;
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    if (!IsWindow(firstEffect) || !clickEffectApply(firstEffect)) return 62;
     if (!waitForChangedState(stateFile, previousState, Clock::now() + std::chrono::seconds(90))) return 52;
 
     const auto closeDeadline = Clock::now() + std::chrono::seconds(15);
