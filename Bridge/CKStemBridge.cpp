@@ -61,16 +61,21 @@ HWND currentAuditionDialog()
 
 struct EffectSearch { HWND window = nullptr; };
 
-BOOL CALLBACK findEffectWindow(HWND window, LPARAM parameter)
+bool hasStemEffectTitle(HWND window)
 {
-    auto* result = reinterpret_cast<EffectSearch*>(parameter);
-    if (result->window != nullptr || !IsWindowVisible(window) || !isAuditionWindow(window)) return TRUE;
     wchar_t title[512]{};
     GetWindowTextW(window, title, static_cast<int>(std::size(title)));
     std::wstring text(title);
     std::transform(text.begin(), text.end(), text.begin(),
                    [](wchar_t character) { return static_cast<wchar_t>(std::towlower(character)); });
-    if (text.find(L"ck stem splitter") != std::wstring::npos)
+    return text.find(L"ck stem splitter") != std::wstring::npos;
+}
+
+BOOL CALLBACK findEffectWindow(HWND window, LPARAM parameter)
+{
+    auto* result = reinterpret_cast<EffectSearch*>(parameter);
+    if (result->window != nullptr || !IsWindowVisible(window) || !isAuditionWindow(window)) return TRUE;
+    if (hasStemEffectTitle(window))
     {
         result->window = window;
         return FALSE;
@@ -108,8 +113,31 @@ bool clickEffectApply(HWND effectWindow)
 {
     ButtonSearch search;
     EnumChildWindows(effectWindow, findApplyButton, reinterpret_cast<LPARAM>(&search));
-    if (search.button == nullptr) return false;
-    SendMessageW(search.button, BM_CLICK, 0, 0);
+    if (search.button != nullptr)
+    {
+        SendMessageW(search.button, BM_CLICK, 0, 0);
+        return true;
+    }
+
+    if (!hasStemEffectTitle(effectWindow)) return false;
+    RECT rect{};
+    if (!GetWindowRect(effectWindow, &rect)) return false;
+    const auto width = rect.right - rect.left;
+    const auto height = rect.bottom - rect.top;
+    if (width < 300 || height < 180) return false;
+
+    POINT previous{};
+    GetCursorPos(&previous);
+    SetForegroundWindow(effectWindow);
+    SetCursorPos(rect.right - 140, rect.bottom - 28);
+    INPUT click[2]{};
+    click[0].type = INPUT_MOUSE;
+    click[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+    click[1].type = INPUT_MOUSE;
+    click[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+    const auto sent = SendInput(2, click, sizeof(INPUT)) == 2;
+    SetCursorPos(previous.x, previous.y);
+    if (!sent) return false;
     return true;
 }
 
@@ -297,11 +325,14 @@ int orchestrate(const std::wstring& mode, const std::wstring& requestId, HWND su
     const auto previousState = readTextFile(stateFile);
 
     const auto firstDeadline = Clock::now() + std::chrono::seconds(20);
-    HWND firstEffect = suppliedPluginWindow != nullptr
-        ? GetAncestor(suppliedPluginWindow, GA_ROOT)
-        : nullptr;
-    if (firstEffect != nullptr && (!IsWindow(firstEffect) || !isAuditionWindow(firstEffect)))
-        firstEffect = nullptr;
+    HWND firstEffect = currentEffectWindow();
+    if (firstEffect == nullptr && suppliedPluginWindow != nullptr)
+    {
+        auto candidate = GetAncestor(suppliedPluginWindow, GA_ROOT);
+        if (candidate != nullptr && IsWindow(candidate) && isAuditionWindow(candidate)
+            && hasStemEffectTitle(candidate))
+            firstEffect = candidate;
+    }
     while (Clock::now() < firstDeadline && firstEffect == nullptr)
     {
         firstEffect = currentEffectWindow();
@@ -352,7 +383,6 @@ int orchestrate(const std::wstring& mode, const std::wstring& requestId, HWND su
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     if (secondEffect == nullptr) return 54;
-    if (!clickPreparedStemControl(secondEffect)) return 61;
 
     const auto readyFile = stateDir / L"automation-ready.txt";
     const auto readyDeadline = Clock::now() + std::chrono::minutes(15);
@@ -500,3 +530,4 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
     LocalFree(arguments);
     return result;
 }
+

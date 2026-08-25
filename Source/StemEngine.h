@@ -29,6 +29,7 @@ public:
 
     void startSeparation();
     bool loadPreparedStems(const juce::File& vocalsFile, const juce::File& instrumentalFile);
+    bool loadPreparedStem(const juce::File& stemFile, StemMode mode);
     bool isBusy() const noexcept { return busy.load(); }
     bool hasSeparatedStems() const noexcept { return stemsReady.load(); }
     float getProgress() const noexcept { return progress.load(); }
@@ -46,11 +47,8 @@ private:
     mutable std::mutex stateMutex;
     juce::File sourceFile;
 
-    juce::TimeSliceThread readAheadThread { "CK Stem Splitter Read Ahead" };
-    std::unique_ptr<juce::AudioFormatReaderSource> vocalsReaderSource;
-    std::unique_ptr<juce::AudioFormatReaderSource> instrumentalReaderSource;
-    juce::AudioTransportSource vocalsTransport;
-    juce::AudioTransportSource instrumentalTransport;
+    juce::AudioBuffer<float> vocalsBuffer;
+    juce::AudioBuffer<float> instrumentalBuffer;
 
     double stemSampleRate = 44100.0;
     double currentSampleRate = 44100.0;
@@ -59,6 +57,7 @@ private:
     std::atomic<juce::int64> timelineOffsetSamples { 0 };
     std::atomic<juce::int64> expectedHostSamplePosition { -1 };
     std::atomic<int> lastRenderedMode { -1 };
+    juce::int64 sequentialReadPosition = 0;
 
     std::atomic<bool> busy { false };
     std::atomic<bool> stemsReady { false };
@@ -69,3 +68,4 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemEngine)
 };
+

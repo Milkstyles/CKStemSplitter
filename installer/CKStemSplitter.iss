@@ -1,5 +1,5 @@
 #define MyAppName "CK Stem Splitter"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.5"
 #define MyAppPublisher "Commercial Kings"
 #define MyAppURL "https://commercialkings.com"
 
@@ -40,3 +40,4 @@ Type: filesandordirs; Name: "{commoncf32}\Adobe\CEP\extensions\com.commercialkin
 
 [Run]
 Filename: "{cmd}"; Parameters: "/C echo CK Stem Splitter installed successfully."; Flags: runhidden nowait
+

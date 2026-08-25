@@ -34,13 +34,6 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     };
     addAndMakeVisible(stopSplitButton);
 
-    loadPreparedButton.onClick = [this]
-    {
-        processor.checkAutomationRequestFromUi();
-        processor.publishAutomationReadyFromUi();
-    };
-    addAndMakeVisible(loadPreparedButton);
-
     modeBox.addItem("Original", 1);
     modeBox.addItem("Acapella", 2);
     modeBox.addItem("Instrumental", 3);
@@ -66,6 +59,12 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     modeAttachment = std::make_unique<ComboAttachment>(processor.getAPVTS(), "mode", modeBox);
     gainAttachment = std::make_unique<SliderAttachment>(processor.getAPVTS(), "outputGain", outputGainSlider);
 
+    juce::Component::SafePointer<CKStemSplitterAudioProcessorEditor> safeThis(this);
+    juce::MessageManager::callAsync([safeThis]
+    {
+        if (safeThis != nullptr)
+            safeThis->processor.loadPreparedAutomationStemFromUi();
+    });
 }
 
 void CKStemSplitterAudioProcessorEditor::paint(juce::Graphics& g)
@@ -95,12 +94,12 @@ void CKStemSplitterAudioProcessorEditor::resized()
     captureButton.setBounds(55, 158, 240, 40);
     stopSplitButton.setBounds(325, 158, 240, 40);
 
-    loadPreparedButton.setBounds(55, 215, 510, 40);
-    modeBox.setBounds(55, 270, 300, 38);
+    modeBox.setBounds(55, 235, 300, 38);
 
-    outputGainLabel.setBounds(425, 257, 120, 22);
-    outputGainSlider.setBounds(430, 280, 110, 80);
+    outputGainLabel.setBounds(425, 222, 120, 22);
+    outputGainSlider.setBounds(430, 245, 110, 80);
 
-    progressBar.setBounds(55, 325, 300, 22);
+    progressBar.setBounds(55, 305, 300, 22);
     statusLabel.setBounds(45, 365, 530, 42);
 }
+

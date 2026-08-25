@@ -288,16 +288,16 @@ void CKStemSplitterAudioProcessor::restoreLastScanFromUi()
         restoreLastScanState();
 }
 
-void CKStemSplitterAudioProcessor::checkAutomationRequestFromUi()
+void CKStemSplitterAudioProcessor::loadPreparedAutomationStemFromUi()
 {
     jassert(juce::MessageManager::getInstance()->isThisTheMessageThread());
     if (automationRequestChecked)
         return;
-    automationRequestChecked = true;
 
     const auto requestFile = getAutomationFile("automation-process.txt");
     if (!requestFile.existsAsFile())
         return;
+    automationRequestChecked = true;
 
     const auto lines = juce::StringArray::fromLines(requestFile.loadFileAsString());
     requestFile.deleteFile();
@@ -308,22 +308,18 @@ void CKStemSplitterAudioProcessor::checkAutomationRequestFromUi()
     const auto requestedMode = lines[1].trim().equalsIgnoreCase("instrumental") ? 2 : 1;
     const juce::File scanFile(lines[2].trim());
     const auto timelineOffset = lines[3].trim().getLargeIntValue();
-    const juce::File vocalsFile(lines[4].trim());
-    const juce::File instrumentalFile(lines[5].trim());
+    const juce::File preparedFile(requestedMode == 2 ? lines[5].trim() : lines[4].trim());
     if (auto* mode = apvts.getRawParameterValue("mode"))
         mode->store(static_cast<float>(requestedMode));
     capturedSelectionFile = scanFile;
     stemEngine.setTimelineOffsetSamples(juce::jmax<juce::int64>(0, timelineOffset));
     stemEngine.setSourceFile(scanFile);
     setCaptureStatus("Loading finished stems from the companion...");
-    if (!stemEngine.loadPreparedStems(vocalsFile, instrumentalFile))
+    if (!stemEngine.loadPreparedStem(preparedFile, static_cast<StemEngine::StemMode>(requestedMode)))
+    {
         automationRequestId.clear();
-}
-
-void CKStemSplitterAudioProcessor::publishAutomationReadyFromUi()
-{
-    if (automationRequestId.isEmpty() || !stemEngine.hasSeparatedStems())
         return;
+    }
 
     const auto readyFile = getAutomationFile("automation-ready.txt");
     readyFile.getParentDirectory().createDirectory();
@@ -367,3 +363,4 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new CKStemSplitterAudioProcessor();
 }
+

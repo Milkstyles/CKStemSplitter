@@ -41,8 +41,7 @@ public:
     juce::int64 getCapturedSamples() const noexcept { return capturedSamples.load(); }
     juce::String getCaptureStatus() const;
     void restoreLastScanFromUi();
-    void checkAutomationRequestFromUi();
-    void publishAutomationReadyFromUi();
+    void loadPreparedAutomationStemFromUi();
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -73,3 +72,4 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CKStemSplitterAudioProcessor)
 };
+

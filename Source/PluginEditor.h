@@ -19,7 +19,6 @@ private:
     juce::Label instructionLabel;
     juce::TextButton captureButton { "MAKE ACAPELLA" };
     juce::TextButton stopSplitButton { "MAKE INSTRUMENTAL" };
-    juce::TextButton loadPreparedButton { "LOAD PREPARED STEM" };
     juce::ComboBox modeBox;
     juce::Slider outputGainSlider;
     juce::Label outputGainLabel;
@@ -34,3 +33,4 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CKStemSplitterAudioProcessorEditor)
 };
+
