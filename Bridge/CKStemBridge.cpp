@@ -109,14 +109,32 @@ BOOL CALLBACK findApplyButton(HWND child, LPARAM parameter)
     return TRUE;
 }
 
+bool sendRealMouseClick(int x, int y)
+{
+    POINT previous{};
+    GetCursorPos(&previous);
+    if (!SetCursorPos(x, y)) return false;
+    INPUT click[2]{};
+    click[0].type = INPUT_MOUSE;
+    click[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+    click[1].type = INPUT_MOUSE;
+    click[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+    const auto sent = SendInput(2, click, sizeof(INPUT)) == 2;
+    SetCursorPos(previous.x, previous.y);
+    return sent;
+}
+
 bool clickEffectApply(HWND effectWindow)
 {
     ButtonSearch search;
     EnumChildWindows(effectWindow, findApplyButton, reinterpret_cast<LPARAM>(&search));
     if (search.button != nullptr)
     {
-        SendMessageW(search.button, BM_CLICK, 0, 0);
-        return true;
+        RECT buttonRect{};
+        if (!GetWindowRect(search.button, &buttonRect)) return false;
+        SetForegroundWindow(effectWindow);
+        return sendRealMouseClick((buttonRect.left + buttonRect.right) / 2,
+                                  (buttonRect.top + buttonRect.bottom) / 2);
     }
 
     if (!hasStemEffectTitle(effectWindow)) return false;
@@ -126,19 +144,8 @@ bool clickEffectApply(HWND effectWindow)
     const auto height = rect.bottom - rect.top;
     if (width < 300 || height < 180) return false;
 
-    POINT previous{};
-    GetCursorPos(&previous);
     SetForegroundWindow(effectWindow);
-    SetCursorPos(rect.right - 140, rect.bottom - 28);
-    INPUT click[2]{};
-    click[0].type = INPUT_MOUSE;
-    click[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-    click[1].type = INPUT_MOUSE;
-    click[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-    const auto sent = SendInput(2, click, sizeof(INPUT)) == 2;
-    SetCursorPos(previous.x, previous.y);
-    if (!sent) return false;
-    return true;
+    return sendRealMouseClick(rect.right - 140, rect.bottom - 28);
 }
 
 struct PluginChildSearch
