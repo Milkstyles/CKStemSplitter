@@ -1,0 +1,17 @@
+.local-tools/
+.engine-build-env/
+build-fast/
+build-fast*/
+benchmark-queue/
+*-benchmark*/
+cpu-single-pass-benchmark*/
+installed-*-smoke/
+installed-cpu-comparison/
+local-install-backups/
+.cache/
+DumpInspect.obj
+engine/__pycache__/
+build-local*/
+vendor/
+staging/
+dist/

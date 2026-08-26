@@ -1,7 +1,7 @@
 #include "PluginEditor.h"
 
 CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSplitterAudioProcessor& p)
-    : AudioProcessorEditor(&p), processor(p), progressBar(progressValue)
+    : AudioProcessorEditor(&p), processor(p)
 {
     setSize(620, 430);
 
@@ -10,68 +10,42 @@ CKStemSplitterAudioProcessorEditor::CKStemSplitterAudioProcessorEditor(CKStemSpl
     titleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(titleLabel);
 
-    subtitleLabel.setText("FAST VOCAL / INSTRUMENTAL SEPARATION", juce::dontSendNotification);
+    subtitleLabel.setText("AUDITION OFFLINE SELECTION EFFECT", juce::dontSendNotification);
     subtitleLabel.setFont(juce::Font(13.0f));
     subtitleLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(subtitleLabel);
 
-    loadButton.onClick = [this] { chooseAudioFile(); };
-    addAndMakeVisible(loadButton);
+    instructionLabel.setText("Highlight audio, choose a stem, and wait - no playback or file dialogs",
+                             juce::dontSendNotification);
+    instructionLabel.setFont(juce::Font(12.0f));
+    instructionLabel.setJustificationType(juce::Justification::centred);
+    instructionLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    addAndMakeVisible(instructionLabel);
 
-    fileLabel.setText("No audio file selected", juce::dontSendNotification);
-    fileLabel.setJustificationType(juce::Justification::centredLeft);
-    fileLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
-    addAndMakeVisible(fileLabel);
-
-    modeBox.addItem("Original", 1);
-    modeBox.addItem("Vocals", 2);
-    modeBox.addItem("Instrumental", 3);
-    addAndMakeVisible(modeBox);
-
-    outputGainSlider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    outputGainSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 80, 24);
-    outputGainSlider.setTextValueSuffix(" dB");
-    addAndMakeVisible(outputGainSlider);
-
-    outputGainLabel.setText("OUTPUT", juce::dontSendNotification);
-    outputGainLabel.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(outputGainLabel);
-
-    analyzeButton.onClick = [this]
+    captureButton.onClick = [this]
     {
-        processor.getStemEngine().startSeparation();
+        processor.startAutomatedWorkflow(1, getPeer() != nullptr ? getPeer()->getNativeHandle() : nullptr);
     };
-    addAndMakeVisible(analyzeButton);
+    addAndMakeVisible(captureButton);
 
-    progressBar.setPercentageDisplay(true);
-    addAndMakeVisible(progressBar);
+    stopSplitButton.onClick = [this]
+    {
+        processor.startAutomatedWorkflow(2, getPeer() != nullptr ? getPeer()->getNativeHandle() : nullptr);
+    };
+    addAndMakeVisible(stopSplitButton);
 
+    statusLabel.setText("Choose one button. Audition applies the finished stem automatically.",
+                        juce::dontSendNotification);
     statusLabel.setJustificationType(juce::Justification::centred);
     statusLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    statusLabel.setMinimumHorizontalScale(0.72f);
     addAndMakeVisible(statusLabel);
 
-    modeAttachment = std::make_unique<ComboAttachment>(processor.getAPVTS(), "mode", modeBox);
-    gainAttachment = std::make_unique<SliderAttachment>(processor.getAPVTS(), "outputGain", outputGainSlider);
-
-    startTimerHz(12);
-}
-
-void CKStemSplitterAudioProcessorEditor::chooseAudioFile()
-{
-    fileChooser = std::make_unique<juce::FileChooser>(
-        "Choose a song to split",
-        juce::File{},
-        "*.wav;*.mp3;*.flac;*.ogg;*.aif;*.aiff");
-
-    const auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-    fileChooser->launchAsync(flags, [this](const juce::FileChooser& chooser)
+    juce::Component::SafePointer<CKStemSplitterAudioProcessorEditor> safeThis(this);
+    juce::MessageManager::callAsync([safeThis]
     {
-        const auto file = chooser.getResult();
-        if (file.existsAsFile())
-        {
-            processor.getStemEngine().setSourceFile(file);
-            fileLabel.setText(file.getFileName(), juce::dontSendNotification);
-        }
+        if (safeThis != nullptr)
+            safeThis->processor.loadPreparedAutomationStemFromUi();
     });
 }
 
@@ -85,31 +59,23 @@ void CKStemSplitterAudioProcessorEditor::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour::fromRGB(210, 35, 45));
     g.fillRoundedRectangle(45.0f, 102.0f, 530.0f, 4.0f, 2.0f);
+
+    if (processor.isCapturingSelection())
+    {
+        g.setColour(juce::Colour::fromRGB(210, 35, 45));
+        g.drawRoundedRectangle(45.0f, 148.0f, 530.0f, 58.0f, 7.0f, 2.0f);
+    }
 }
 
 void CKStemSplitterAudioProcessorEditor::resized()
 {
-    titleLabel.setBounds(50, 35, 520, 42);
-    subtitleLabel.setBounds(50, 75, 520, 22);
+    titleLabel.setBounds(50, 30, 520, 42);
+    subtitleLabel.setBounds(50, 70, 520, 22);
+    instructionLabel.setBounds(40, 112, 540, 28);
 
-    loadButton.setBounds(55, 125, 145, 38);
-    fileLabel.setBounds(215, 125, 350, 38);
+    captureButton.setBounds(55, 158, 240, 40);
+    stopSplitButton.setBounds(325, 158, 240, 40);
 
-    modeBox.setBounds(55, 185, 300, 38);
-
-    outputGainLabel.setBounds(425, 172, 120, 22);
-    outputGainSlider.setBounds(430, 195, 110, 110);
-
-    analyzeButton.setBounds(55, 250, 300, 48);
-    progressBar.setBounds(55, 320, 490, 22);
-    statusLabel.setBounds(55, 360, 510, 28);
+    statusLabel.setBounds(45, 245, 530, 42);
 }
 
-void CKStemSplitterAudioProcessorEditor::timerCallback()
-{
-    auto& engine = processor.getStemEngine();
-    progressValue = engine.getProgress();
-    statusLabel.setText(engine.getStatus(), juce::dontSendNotification);
-    analyzeButton.setEnabled(!engine.isBusy() && engine.hasSourceFile());
-    loadButton.setEnabled(!engine.isBusy());
-}

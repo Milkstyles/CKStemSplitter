@@ -2,8 +2,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-class CKStemSplitterAudioProcessorEditor : public juce::AudioProcessorEditor,
-                                           private juce::Timer
+class CKStemSplitterAudioProcessorEditor : public juce::AudioProcessorEditor
 {
 public:
     explicit CKStemSplitterAudioProcessorEditor(CKStemSplitterAudioProcessor&);
@@ -13,29 +12,15 @@ public:
     void resized() override;
 
 private:
-    void timerCallback() override;
-    void chooseAudioFile();
-
     CKStemSplitterAudioProcessor& processor;
 
     juce::Label titleLabel;
     juce::Label subtitleLabel;
-    juce::TextButton loadButton { "LOAD AUDIO" };
-    juce::Label fileLabel;
-    juce::ComboBox modeBox;
-    juce::Slider outputGainSlider;
-    juce::Label outputGainLabel;
-    juce::TextButton analyzeButton { "SPLIT STEMS" };
-    juce::ProgressBar progressBar;
-    double progressValue = 0.0;
+    juce::Label instructionLabel;
+    juce::TextButton captureButton { "MAKE ACAPELLA" };
+    juce::TextButton stopSplitButton { "MAKE INSTRUMENTAL" };
     juce::Label statusLabel;
-
-    std::unique_ptr<juce::FileChooser> fileChooser;
-
-    using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
-    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    std::unique_ptr<ComboAttachment> modeAttachment;
-    std::unique_ptr<SliderAttachment> gainAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CKStemSplitterAudioProcessorEditor)
 };
+

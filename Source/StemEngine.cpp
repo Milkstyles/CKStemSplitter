@@ -1,8 +1,8 @@
 #include "StemEngine.h"
+#include <limits>
 
 StemEngine::StemEngine()
 {
-    readAheadThread.startThread();
 }
 
 StemEngine::~StemEngine()
@@ -16,7 +16,6 @@ StemEngine::~StemEngine()
         std::scoped_lock lock(stateMutex);
         clearStemSources();
     }
-    readAheadThread.stopThread(2000);
 }
 
 void StemEngine::prepare(double sampleRate, int samplesPerBlock, int channels)
@@ -24,25 +23,24 @@ void StemEngine::prepare(double sampleRate, int samplesPerBlock, int channels)
     currentSampleRate = sampleRate;
     currentBlockSize = samplesPerBlock;
     currentChannels = channels;
+    expectedHostSamplePosition.store(-1);
+    lastRenderedMode.store(-1);
 
-    std::scoped_lock lock(stateMutex);
-    vocalsTransport.prepareToPlay(samplesPerBlock, sampleRate);
-    instrumentalTransport.prepareToPlay(samplesPerBlock, sampleRate);
 }
 
 void StemEngine::reset()
 {
-    // Keep cached stems and transport sources ready between playback starts/stops.
+    expectedHostSamplePosition.store(-1);
+    lastRenderedMode.store(-1);
 }
 
 void StemEngine::clearStemSources()
 {
-    vocalsTransport.stop();
-    instrumentalTransport.stop();
-    vocalsTransport.setSource(nullptr);
-    instrumentalTransport.setSource(nullptr);
-    vocalsReaderSource.reset();
-    instrumentalReaderSource.reset();
+    vocalsBuffer.setSize(0, 0);
+    instrumentalBuffer.setSize(0, 0);
+    sequentialReadPosition = 0;
+    expectedHostSamplePosition.store(-1);
+    lastRenderedMode.store(-1);
 }
 
 void StemEngine::setSourceFile(const juce::File& file)
@@ -55,7 +53,7 @@ void StemEngine::setSourceFile(const juce::File& file)
     sourceFile = file;
     progress.store(0.0f);
     clearStemSources();
-    status = "Ready to split: " + file.getFileName();
+    status = "Ready to split captured selection";
 }
 
 juce::File StemEngine::getSourceFile() const
@@ -114,7 +112,7 @@ void StemEngine::startSeparation()
     {
         busy.store(false);
         std::scoped_lock lock(stateMutex);
-        status = "Choose an audio file first";
+        status = "Capture an Audition selection first";
         return;
     }
 
@@ -126,6 +124,53 @@ void StemEngine::startSeparation()
         workerThread.join();
 
     workerThread = std::thread([this] { separationWorker(); });
+}
+
+bool StemEngine::loadPreparedStems(const juce::File& vocalsFile, const juce::File& instrumentalFile)
+{
+    progress.store(0.9f);
+    const auto loaded = loadCachedStems(vocalsFile, instrumentalFile);
+    progress.store(loaded ? 1.0f : 0.0f);
+    busy.store(false);
+    return loaded;
+}
+
+bool StemEngine::loadPreparedStem(const juce::File& stemFile, StemMode mode)
+{
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    auto reader = std::unique_ptr<juce::AudioFormatReader>(formats.createReaderFor(stemFile));
+    if (reader == nullptr || reader->lengthInSamples <= 0 || reader->lengthInSamples > std::numeric_limits<int>::max())
+    {
+        std::scoped_lock lock(stateMutex);
+        status = "Could not read the prepared stem WAV";
+        return false;
+    }
+
+    juce::AudioBuffer<float> loaded(static_cast<int>(reader->numChannels),
+                                    static_cast<int>(reader->lengthInSamples));
+    if (!reader->read(&loaded, 0, loaded.getNumSamples(), 0, true, true))
+    {
+        std::scoped_lock lock(stateMutex);
+        status = "Could not load the prepared stem WAV";
+        return false;
+    }
+
+    stemsReady.store(false);
+    {
+        std::scoped_lock lock(stateMutex);
+        clearStemSources();
+        stemSampleRate = reader->sampleRate;
+        if (mode == StemMode::instrumental)
+            instrumentalBuffer = std::move(loaded);
+        else
+            vocalsBuffer = std::move(loaded);
+        status = mode == StemMode::instrumental ? "Instrumental ready" : "Acapella ready";
+    }
+    progress.store(1.0f);
+    busy.store(false);
+    stemsReady.store(true);
+    return true;
 }
 
 void StemEngine::separationWorker()
@@ -276,25 +321,38 @@ bool StemEngine::loadCachedStems(const juce::File& vocalsFile, const juce::File&
         return false;
     }
 
-    auto newVocals = std::make_unique<juce::AudioFormatReaderSource>(vocalReader.release(), true);
-    auto newInstrumental = std::make_unique<juce::AudioFormatReaderSource>(instrumentalReader.release(), true);
+    if (vocalReader->lengthInSamples <= 0 || instrumentalReader->lengthInSamples <= 0
+        || vocalReader->lengthInSamples > std::numeric_limits<int>::max()
+        || instrumentalReader->lengthInSamples > std::numeric_limits<int>::max())
+    {
+        std::scoped_lock lock(stateMutex);
+        status = "Separated WAV files are too large to load safely";
+        return false;
+    }
+
+    juce::AudioBuffer<float> newVocals(static_cast<int>(vocalReader->numChannels),
+                                       static_cast<int>(vocalReader->lengthInSamples));
+    juce::AudioBuffer<float> newInstrumental(static_cast<int>(instrumentalReader->numChannels),
+                                             static_cast<int>(instrumentalReader->lengthInSamples));
+    if (!vocalReader->read(&newVocals, 0, newVocals.getNumSamples(), 0, true, true)
+        || !instrumentalReader->read(&newInstrumental, 0, newInstrumental.getNumSamples(), 0, true, true))
+    {
+        std::scoped_lock lock(stateMutex);
+        status = "Could not load separated WAV files";
+        return false;
+    }
 
     stemsReady.store(false);
     {
         std::scoped_lock lock(stateMutex);
         clearStemSources();
-        vocalsReaderSource = std::move(newVocals);
-        instrumentalReaderSource = std::move(newInstrumental);
+        vocalsBuffer = std::move(newVocals);
+        instrumentalBuffer = std::move(newInstrumental);
         stemSampleRate = vocalRate;
-
-        constexpr int readAheadSamples = 262144;
-        vocalsTransport.setSource(vocalsReaderSource.get(), readAheadSamples, &readAheadThread, stemSampleRate, 2);
-        instrumentalTransport.setSource(instrumentalReaderSource.get(), readAheadSamples, &readAheadThread, stemSampleRate, 2);
-        vocalsTransport.prepareToPlay(currentBlockSize, currentSampleRate);
-        instrumentalTransport.prepareToPlay(currentBlockSize, currentSampleRate);
-        vocalsTransport.start();
-        instrumentalTransport.start();
-        status = "Stems ready - choose Vocals or Instrumental";
+        expectedHostSamplePosition.store(-1);
+        lastRenderedMode.store(-1);
+        sequentialReadPosition = 0;
+        status = "Stems ready - choose Acapella or Instrumental, then click Audition Apply";
     }
 
     stemsReady.store(true);
@@ -303,12 +361,18 @@ bool StemEngine::loadCachedStems(const juce::File& vocalsFile, const juce::File&
 
 void StemEngine::process(juce::AudioBuffer<float>& buffer, StemMode mode, juce::int64 hostSamplePosition)
 {
+    const auto modeIndex = static_cast<int>(mode);
     if (mode == StemMode::original)
+    {
+        expectedHostSamplePosition.store(-1);
+        lastRenderedMode.store(modeIndex);
         return;
+    }
 
-    if (!stemsReady.load() || hostSamplePosition < 0 || currentSampleRate <= 0.0)
+    if (!stemsReady.load() || currentSampleRate <= 0.0)
     {
         buffer.clear();
+        expectedHostSamplePosition.store(-1);
         return;
     }
 
@@ -319,16 +383,51 @@ void StemEngine::process(juce::AudioBuffer<float>& buffer, StemMode mode, juce::
         return;
     }
 
-    auto& transport = (mode == StemMode::vocals) ? vocalsTransport : instrumentalTransport;
-    const double targetSeconds = static_cast<double>(hostSamplePosition) / currentSampleRate;
-    const double driftSeconds = std::abs(transport.getCurrentPosition() - targetSeconds);
+    auto& stem = (mode == StemMode::vocals) ? vocalsBuffer : instrumentalBuffer;
+    if (stem.getNumChannels() <= 0 || stem.getNumSamples() <= 0)
+    {
+        buffer.clear();
+        return;
+    }
 
-    const double blockSeconds = static_cast<double>(buffer.getNumSamples()) / currentSampleRate;
-    if (driftSeconds > juce::jmax(0.050, blockSeconds * 4.0))
-        transport.setPosition(targetSeconds);
+    juce::int64 sourceStart = sequentialReadPosition;
+    if (hostSamplePosition >= 0)
+    {
+        const auto relativeSample = hostSamplePosition - timelineOffsetSamples.load();
+        if (relativeSample < 0)
+        {
+            buffer.clear();
+            expectedHostSamplePosition.store(-1);
+            lastRenderedMode.store(modeIndex);
+            return;
+        }
 
-    juce::AudioSourceChannelInfo info(&buffer, 0, buffer.getNumSamples());
-    transport.getNextAudioBlock(info);
+        sourceStart = relativeSample;
+        expectedHostSamplePosition.store(hostSamplePosition + buffer.getNumSamples());
+        lastRenderedMode.store(modeIndex);
+    }
+    else
+    {
+        expectedHostSamplePosition.store(-1);
+        lastRenderedMode.store(modeIndex);
+    }
+
+    if (sourceStart < 0 || sourceStart >= stem.getNumSamples())
+    {
+        buffer.clear();
+        return;
+    }
+
+    const auto available = juce::jmin(buffer.getNumSamples(),
+                                      stem.getNumSamples() - static_cast<int>(sourceStart));
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+    {
+        const auto sourceChannel = juce::jmin(channel, stem.getNumChannels() - 1);
+        buffer.copyFrom(channel, 0, stem, sourceChannel, static_cast<int>(sourceStart), available);
+        if (available < buffer.getNumSamples())
+            buffer.clear(channel, available, buffer.getNumSamples() - available);
+    }
+    sequentialReadPosition = sourceStart + available;
 }
 
 juce::String StemEngine::getStatus() const
@@ -336,3 +435,4 @@ juce::String StemEngine::getStatus() const
     std::scoped_lock lock(stateMutex);
     return status;
 }
+

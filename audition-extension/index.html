@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline';">
+    <title>CK Stem Splitter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main>
+        <div class="brand">CK STEM SPLITTER</div>
+        <div class="tagline">OFFLINE AUDITION SELECTION WORKFLOW</div>
+        <div class="rule"></div>
+
+        <section class="step">
+            <span class="number">1</span>
+            <div>
+                <strong>Highlight audio</strong>
+                <p>Select a range in Audition's Waveform Editor.</p>
+            </div>
+        </section>
+
+        <button id="splitButton" class="primary">SPLIT HIGHLIGHTED SELECTION</button>
+
+        <section id="stemSection" class="stems disabled">
+            <label class="stem selected">
+                <input type="radio" name="stem" value="vocals" checked>
+                <span>VOCALS</span>
+            </label>
+            <label class="stem">
+                <input type="radio" name="stem" value="instrumental">
+                <span>INSTRUMENTAL</span>
+            </label>
+        </section>
+
+        <button id="applyButton" class="apply" disabled>REPLACE SELECTION WITH VOCALS</button>
+
+        <div id="progress" class="progress hidden"><div></div></div>
+        <div id="status" class="status">Ready — no playback or file browser needed.</div>
+        <button id="retryButton" class="link hidden">Try selection export again</button>
+
+        <div class="note">The original selection remains recoverable with Audition Undo.</div>
+    </main>
+    <script src="main.js"></script>
+</body>
+</html>
