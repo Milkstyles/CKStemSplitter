@@ -1,15 +1,15 @@
-# Building CK Stem Splitter Setup
+# Building the CK Stem Splitter Windows installer
 
-The Windows installer is built by `.github/workflows/windows-ci.yml`.
+The supported installer is built by `.github/workflows/windows-ci.yml`.
 
 The job:
 
-1. Builds the Audition-compatible JUCE VST3 with Visual Studio.
-2. Verifies that the offline scan watchdog and Effects-panel UI are present.
-3. Prewarms the bundled `htdemucs_ft_vocals` FP16 model.
-4. Freezes the local stem engine and its runtime dependencies.
-5. Runs the engine against a generated WAV and verifies both stems.
+1. Builds the known-good **CK Stem Splitter** VST3 and its tests with Visual Studio.
+2. Verifies that a standalone VST3 host can load and create the plug-in.
+3. Installs pinned CPU-only engine dependencies and prewarms the bundled `htdemucs_ft_vocals` FP16 model.
+4. Freezes the local Python engine into a self-contained Windows executable.
+5. Runs an end-to-end offline Acapella render through the actual plug-in processor.
 6. Packages the VST3, engine, and model with Inno Setup.
-7. Uploads the installer and SHA-256 checksum.
+7. Checks the installer size, generates a SHA-256 checksum, and uploads both files.
 
-No Python, model download, or developer tools are required on the user's PC.
+The finished installer does not require Python, developer tools, a model download, or the retired Adobe extension/automation companion on the user's computer.

@@ -19,60 +19,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify Windows runner
-        shell: pwsh
-        run: |
-          Write-Host "CK Stem Splitter Windows CI is running"
-          cmake --version
-          python --version
-          Get-ChildItem 'C:\Program Files\Microsoft Visual Studio' -Directory -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-
       - name: Configure Windows build
         shell: pwsh
         run: cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 
-      - name: Build Audition VST3
+      - name: Build known-good Audition VST3 and tests
         shell: pwsh
-        run: cmake --build build --config Release --target CKStemSplitter_VST3 --parallel
+        run: cmake --build build --config Release --target CKAuditionOfflineProbe_VST3 CKAuditionOfflineProbeTest CKStemPrototypeRenderTest CKVST3HostLoadTest --parallel
 
-      - name: Build Audition automation companion
-        shell: pwsh
-        run: |
-          cmake --build build --config Release --target CKStemBridge --parallel
-          New-Item -ItemType Directory -Force -Path staging\companion | Out-Null
-          $bridge = Get-ChildItem -Path build -Recurse -Filter "CKStemBridge.exe" | Select-Object -First 1 -ExpandProperty FullName
-          if (!(Test-Path $bridge)) { throw "Audition automation companion was not built." }
-          Copy-Item $bridge staging\companion\CKStemBridge.exe -Force
-
-      - name: Stage and verify Audition offline effect
+      - name: Stage and validate VST3
         shell: pwsh
         run: |
-          $vst = Join-Path $PWD "build\CKStemSplitter_artefacts\Release\VST3\CK Stem Splitter.vst3"
-          if (!(Test-Path $vst)) {
-            $vst = Get-ChildItem -Path build -Recurse -Filter "CK Stem Splitter.vst3" | Select-Object -First 1 -ExpandProperty FullName
-          }
-          if (!(Test-Path $vst)) { throw "Audition VST3 was not built." }
-
+          $vst = Join-Path $PWD "build\CKAuditionOfflineProbe_artefacts\Release\VST3\CK Stem Splitter.vst3"
+          if (!(Test-Path $vst)) { throw "Known-good Audition VST3 was not built." }
           New-Item -ItemType Directory -Force -Path staging | Out-Null
           Copy-Item $vst staging -Recurse -Force
-          if (!(Select-String -Path Source\PluginProcessor.cpp -Pattern "lastCaptureActivityTicks" -Quiet)) {
-            throw "VST3 is missing automatic offline scan completion."
-          }
-          if (!(Select-String -Path Source\PluginEditor.h -Pattern "MAKE ACAPELLA" -Quiet)) {
-            throw "VST3 is missing the one-click stem workflow UI."
-          }
-          if (!(Select-String -Path Source\PluginProcessor.cpp -Pattern "restoreLastScanState" -Quiet)) {
-            throw "VST3 is missing cross-Apply stem cache restoration."
-          }
-          if (Select-String -Path Source\PluginProcessor.cpp -Pattern "prepareToPlay[\s\S]*restoreLastScanState" -Quiet) {
-            throw "VST3 performs unsafe file restoration from Audition's audio preparation callback."
-          }
 
-      - name: Install engine build dependencies
+          & build\Release\CKAuditionOfflineProbeTest.exe
+          if ($LASTEXITCODE -ne 0) { throw "Offline processor unit test failed." }
+          & build\Release\CKVST3HostLoadTest.exe $vst
+          if ($LASTEXITCODE -ne 0) { throw "VST3 host-load test failed." }
+
+      - name: Install pinned engine build dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "demucs-onnx[mp3]==0.3.0" "pyinstaller>=6.10,<7"
+          python -m pip install "demucs-onnx[mp3]==0.3.0" "onnxruntime==1.29.0" "pyinstaller>=6.10,<7"
 
       - name: Prewarm bundled vocal model
         shell: pwsh
@@ -83,12 +55,10 @@ jobs:
             --precision fp16weights `
             --providers cpu `
             --cache-dir "$PWD\staging\engine\models"
-
           $modelBytes = (Get-ChildItem staging\engine\models -Recurse -File | Measure-Object Length -Sum).Sum
-          Write-Host "Bundled model bytes: $modelBytes"
           if ($modelBytes -lt 100MB) { throw "Bundled model cache is unexpectedly small." }
 
-      - name: Freeze self-contained AI engine
+      - name: Freeze self-contained CPU engine
         shell: pwsh
         run: |
           python -m PyInstaller `
@@ -105,24 +75,22 @@ jobs:
             --collect-all soxr `
             --collect-all huggingface_hub `
             engine\ckstem_engine.py
+          if (!(Test-Path staging\engine\ckstem-engine\ckstem-engine.exe)) {
+            throw "Frozen CK stem engine was not created."
+          }
 
-          $engineExe = "staging\engine\ckstem-engine\ckstem-engine.exe"
-          if (!(Test-Path $engineExe)) { throw "Frozen CK stem engine was not created." }
-          & $engineExe --help
-          & $engineExe list-models
-
-      - name: Create smoke-test audio
+      - name: Create offline-render test audio
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path build\smoke-in | Out-Null
+          New-Item -ItemType Directory -Force -Path build\smoke | Out-Null
           @'
           import math
           import wave
           from pathlib import Path
 
-          sample_rate = 44100
-          seconds = 3
-          output = Path(r"build/smoke-in/test.wav")
+          sample_rate = 48000
+          seconds = 18
+          output = Path(r"build/smoke/input.wav")
           with wave.open(str(output), "wb") as wav:
               wav.setnchannels(2)
               wav.setsampwidth(2)
@@ -130,36 +98,28 @@ jobs:
               frames = bytearray()
               for i in range(sample_rate * seconds):
                   t = i / sample_rate
-                  sample = int(0.22 * 32767 * (math.sin(2 * math.pi * 220 * t) + 0.4 * math.sin(2 * math.pi * 880 * t)) / 1.4)
-                  b = int(sample).to_bytes(2, "little", signed=True)
-                  frames.extend(b)
-                  frames.extend(b)
+                  envelope = 0.55 + 0.35 * math.sin(2 * math.pi * 1.7 * t)
+                  left = envelope * (math.sin(2 * math.pi * 220 * t) + 0.35 * math.sin(2 * math.pi * 880 * t))
+                  right = envelope * (math.sin(2 * math.pi * 247 * t) + 0.30 * math.sin(2 * math.pi * 990 * t))
+                  for sample in (left, right):
+                      value = max(-32767, min(32767, int(sample * 12000)))
+                      frames.extend(value.to_bytes(2, "little", signed=True))
               wav.writeframes(frames)
-          print(output.resolve())
           '@ | python -
 
-      - name: Smoke test real stem separation
+      - name: Test persistent single-pass engine through VST processor
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path build\smoke-out | Out-Null
-          & staging\engine\ckstem-engine\ckstem-engine.exe separate `
-            build\smoke-in\test.wav `
-            build\smoke-out `
-            --model htdemucs_ft_vocals `
-            --small `
-            --providers cpu `
-            --cache-dir "$PWD\staging\engine\models" `
-            --karaoke `
-            --quiet
-
-          Write-Host "Smoke-test outputs:"
-          Get-ChildItem build\smoke-out -Recurse -File | ForEach-Object { Write-Host "$($_.FullName) $($_.Length) bytes" }
-
-          $vocals = Get-ChildItem build\smoke-out -Recurse -Filter vocals.wav | Select-Object -First 1
-          $karaoke = Get-ChildItem build\smoke-out -Recurse -Filter karaoke.wav | Select-Object -First 1
-          if ($null -eq $vocals) { throw "Smoke test did not create vocals.wav." }
-          if ($null -eq $karaoke) { throw "Smoke test did not create karaoke.wav." }
-          if ($vocals.Length -lt 1000 -or $karaoke.Length -lt 1000) { throw "Smoke-test stems are unexpectedly small." }
+          $env:CK_STEM_ENGINE_PATH = (Resolve-Path "staging\engine\ckstem-engine\ckstem-engine.exe").Path
+          $env:CK_STEM_MODEL_CACHE = (Resolve-Path "staging\engine\models").Path
+          & build\Release\CKStemPrototypeRenderTest.exe `
+            build\smoke\input.wav `
+            build\smoke\acapella.wav `
+            acapella
+          if ($LASTEXITCODE -ne 0) { throw "Persistent single-pass VST render failed." }
+          if ((Get-Item build\smoke\acapella.wav).Length -lt 100KB) {
+            throw "Rendered acapella is unexpectedly small."
+          }
 
       - name: Install Inno Setup
         shell: pwsh
@@ -168,22 +128,14 @@ jobs:
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          if (!(Test-Path $iscc)) { throw "Inno Setup compiler was not found at $iscc" }
-          & $iscc installer\CKStemSplitter.iss
-
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\CKStemSplitter.iss
           $installer = "dist\CK-Stem-Splitter-Setup.exe"
           if (!(Test-Path $installer)) { throw "Windows installer was not created." }
-          $installerBytes = (Get-Item $installer).Length
-          Write-Host "Installer bytes: $installerBytes"
-          if ($installerBytes -lt 100MB) { throw "Installer is unexpectedly small; bundled model/engine may be missing." }
-
-      - name: Generate SHA-256
-        shell: pwsh
-        run: |
-          $hash = Get-FileHash dist\CK-Stem-Splitter-Setup.exe -Algorithm SHA256
-          "$($hash.Hash)  CK-Stem-Splitter-Setup.exe" | Set-Content dist\CK-Stem-Splitter-Setup.exe.sha256
-          Get-Content dist\CK-Stem-Splitter-Setup.exe.sha256
+          if ((Get-Item $installer).Length -lt 100MB) {
+            throw "Installer is unexpectedly small; engine or model may be missing."
+          }
+          $hash = Get-FileHash $installer -Algorithm SHA256
+          "$($hash.Hash)  CK-Stem-Splitter-Setup.exe" | Set-Content "$installer.sha256"
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4

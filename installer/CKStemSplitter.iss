@@ -1,5 +1,5 @@
 #define MyAppName "CK Stem Splitter"
-#define MyAppVersion "1.0.8"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "Commercial Kings"
 #define MyAppURL "https://commercialkings.com"
 
@@ -10,7 +10,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
-DefaultDirName={autopf}\Common Files\VST3
+DefaultDirName={commonappdata}\Commercial Kings\CK Stem Splitter
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 OutputDir=..\dist
@@ -25,21 +25,21 @@ CreateUninstallRegKey=yes
 SetupLogging=yes
 
 [Files]
-Source: "..\staging\CK Stem Splitter.vst3\*"; DestDir: "{app}\CK Stem Splitter.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\staging\CK Stem Splitter.vst3\*"; DestDir: "{commoncf64}\VST3\CK Stem Splitter.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\engine\ckstem-engine\*"; DestDir: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine\ckstem-engine"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\engine\models\*"; DestDir: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine\models"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\staging\companion\CKStemBridge.exe"; DestDir: "{commonappdata}\Commercial Kings\CK Stem Splitter\companion"; Flags: ignoreversion
 
 [Dirs]
 Name: "{commonappdata}\Commercial Kings\CK Stem Splitter\engine"
-Name: "{commonappdata}\Commercial Kings\CK Stem Splitter\companion"
 
 [InstallDelete]
+; Remove retired builds that could conflict with the stable offline renderer.
+Type: filesandordirs; Name: "{commoncf64}\VST3\CK Stem Splitter.vst3"
+Type: filesandordirs; Name: "{commoncf64}\VST3\CK Audition Offline Probe.vst3"
+Type: filesandordirs; Name: "{commoncf32}\Adobe\CEP\extensions\com.commercialkings.ckstemsplitter"
+Type: filesandordirs; Name: "{commonappdata}\Commercial Kings\CK Stem Splitter\companion"
 Type: files; Name: "{userappdata}\Commercial Kings\CK Stem Splitter\automation-process.txt"
 Type: files; Name: "{userappdata}\Commercial Kings\CK Stem Splitter\automation-ready.txt"
-; Remove the discontinued CEP export panel so Audition shows one CK interface.
-Type: filesandordirs; Name: "{commoncf32}\Adobe\CEP\extensions\com.commercialkings.ckstemsplitter"
 
 [Run]
 Filename: "{cmd}"; Parameters: "/C echo CK Stem Splitter installed successfully."; Flags: runhidden nowait
-
