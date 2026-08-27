@@ -16,9 +16,10 @@ This first test build is unsigned. The installer places the extension in the cur
 1. Put the Audition playhead at the insertion point or highlight a range.
 2. Open **Window > Extensions > CK AI Voice Insert**.
 3. Search one unified voice list. Every voice is labeled `ElevenLabs` or `Fish Audio`.
-4. Enter script text.
-5. Click **Generate & Insert**.
-6. The generated audio begins at the selection/playhead start. The generated duration wins: a 3-second selection may receive a 10-second generated voice.
+4. Enter script text and click **Generate New Take** as many times as needed.
+5. Preview the generated takes inside the panel and select the preferred result.
+6. Click **Approve & Insert Selected Take**.
+7. The approved audio begins at the selection/playhead start. The generated duration wins: a 3-second selection may receive a 10-second generated voice.
 
 ## Architecture
 

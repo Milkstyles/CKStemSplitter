@@ -1,5 +1,15 @@
 (function () {
-  const state = { voices: [], filtered: [], selectedVoice: null, providerFilter: 'all' };
+  const state = {
+    voices: [],
+    filtered: [],
+    selectedVoice: null,
+    providerFilter: 'all',
+    takes: [],
+    selectedTakeId: null,
+    nextTakeNumber: 1,
+    generating: false,
+    inserting: false
+  };
   const $ = (id) => document.getElementById(id);
 
   function setStatus(text, error) {
@@ -48,6 +58,53 @@
       list.appendChild(row);
     });
     if (!state.filtered.length) list.innerHTML = '<div class="empty">No voices match this search.</div>';
+  }
+
+  function selectedTake() {
+    for (let i = 0; i < state.takes.length; i += 1) {
+      if (state.takes[i].id === state.selectedTakeId) return state.takes[i];
+    }
+    return null;
+  }
+
+  function renderTakes() {
+    const list = $('takeList');
+    list.innerHTML = '';
+    state.takes.forEach(function (take) {
+      const row = document.createElement('div');
+      row.className = 'takeRow' + (take.id === state.selectedTakeId ? ' selected' : '');
+
+      const title = document.createElement('div');
+      title.className = 'takeTitle';
+      const strong = document.createElement('strong');
+      strong.textContent = 'Take ' + take.number + ' — ' + take.voice.name;
+      const provider = document.createElement('span');
+      provider.textContent = take.voice.provider;
+      title.appendChild(strong);
+      title.appendChild(provider);
+
+      const player = document.createElement('audio');
+      player.controls = true;
+      player.preload = 'metadata';
+      player.src = take.previewUrl;
+
+      const select = document.createElement('button');
+      select.className = 'selectTake';
+      select.textContent = take.id === state.selectedTakeId ? 'SELECTED FOR INSERT' : 'SELECT THIS TAKE';
+      select.onclick = function () {
+        state.selectedTakeId = take.id;
+        renderTakes();
+        setStatus('Take ' + take.number + ' selected. Approve it when ready.');
+      };
+
+      row.appendChild(title);
+      row.appendChild(player);
+      row.appendChild(select);
+      list.appendChild(row);
+    });
+
+    if (!state.takes.length) list.innerHTML = '<div class="empty">No takes generated yet.</div>';
+    $('approveTake').disabled = !selectedTake() || state.inserting;
   }
 
   function applyFilter() {
@@ -120,6 +177,11 @@
     return filePath;
   }
 
+  function previewUrlForFile(filePath) {
+    const fs = require('fs');
+    return 'data:audio/wav;base64,' + fs.readFileSync(filePath).toString('base64');
+  }
+
   function extensionRoot() {
     const raw = window.__adobe_cep__.getSystemPath('extension');
     return decodeURIComponent(String(raw).replace(/^file:\/\//i, '').replace(/^\/(\w:)/, '$1'));
@@ -134,42 +196,83 @@
     if (run.status !== 0) throw new Error((run.stderr || 'Audio clipboard helper failed').trim());
   }
 
-  async function generateAndInsert() {
+  async function generateTake() {
     const voice = state.selectedVoice;
     const text = $('script').value.trim();
     if (!voice) return setStatus('Choose a voice first.', true);
     if (!text) return setStatus('Enter a script first.', true);
+    if (state.generating) return;
+
+    const takeNumber = state.nextTakeNumber;
+    try {
+      state.generating = true;
+      $('generateTake').disabled = true;
+      $('generateTake').textContent = 'GENERATING TAKE ' + takeNumber + '...';
+      setStatus('Generating take ' + takeNumber + ' with ' + voice.name + ' from ' + voice.provider + '...');
+      const audio = await CKProviders.generate(keys(), voice, text);
+      const filePath = writeGeneratedAudio(audio);
+      const take = {
+        id: 'take-' + Date.now() + '-' + takeNumber,
+        number: takeNumber,
+        voice: voice,
+        text: text,
+        filePath: filePath,
+        previewUrl: previewUrlForFile(filePath)
+      };
+      state.takes.unshift(take);
+      state.selectedTakeId = take.id;
+      state.nextTakeNumber += 1;
+      renderTakes();
+      setStatus('Take ' + takeNumber + ' is ready. Preview it, generate another, or approve and insert it.');
+    } catch (err) {
+      setStatus('Take ' + takeNumber + ' failed: ' + err.message, true);
+    } finally {
+      state.generating = false;
+      $('generateTake').disabled = false;
+      $('generateTake').textContent = 'GENERATE NEW TAKE';
+    }
+  }
+
+  async function approveAndInsert() {
+    const take = selectedTake();
+    if (!take) return setStatus('Select a generated take first.', true);
+    if (state.inserting) return;
 
     try {
-      setStatus('Reading Audition insertion point...');
+      state.inserting = true;
+      $('approveTake').disabled = true;
+      $('approveTake').textContent = 'INSERTING TAKE ' + take.number + '...';
+
+      setStatus('Reading the current Audition insertion point...');
       const contextRaw = await evalHost('CKVoiceInsert.getInsertionContext()');
       let context;
       try { context = JSON.parse(contextRaw); } catch (_) { context = { ok: false, error: contextRaw }; }
       if (!context.ok) throw new Error(context.error || 'Could not read Audition insertion point.');
 
-      setStatus('Generating ' + voice.name + ' from ' + voice.provider + '...');
-      const audio = await CKProviders.generate(keys(), voice, text);
-      const filePath = writeGeneratedAudio(audio);
+      setStatus('Preparing approved take ' + take.number + ' for Audition...');
+      copyWaveToClipboard(take.filePath);
 
-      setStatus('Preparing generated audio for Audition...');
-      copyWaveToClipboard(filePath);
-
-      setStatus('Inserting generated audio at ' + Number(context.startSeconds || 0).toFixed(3) + 's...');
+      setStatus('Inserting take ' + take.number + ' at ' + Number(context.startSeconds || 0).toFixed(3) + 's...');
       const mode = $('insertMode').value;
       const insertRaw = await evalHost("CKVoiceInsert.insertGeneratedAudio('', '" + mode + "', " + Number(context.startSamples || 0) + ")");
       let inserted;
       try { inserted = JSON.parse(insertRaw); } catch (_) { inserted = { ok: false, error: insertRaw }; }
       if (!inserted.ok) throw new Error(inserted.error || 'Audition insertion failed.');
-      setStatus('Inserted ' + voice.name + ' at the selected start time.');
+      setStatus('Approved take ' + take.number + ' was inserted at the selected start time.');
     } catch (err) {
-      setStatus(err.message, true);
+      setStatus('Could not insert take ' + take.number + ': ' + err.message, true);
+    } finally {
+      state.inserting = false;
+      $('approveTake').textContent = 'APPROVE & INSERT SELECTED TAKE';
+      renderTakes();
     }
   }
 
   $('saveKeys').onclick = saveKeys;
   $('refreshVoices').onclick = refreshVoices;
   $('voiceSearch').oninput = applyFilter;
-  $('generateInsert').onclick = generateAndInsert;
+  $('generateTake').onclick = generateTake;
+  $('approveTake').onclick = approveAndInsert;
   document.querySelectorAll('.filter[data-provider]').forEach(function (button) {
     button.onclick = function () {
       document.querySelectorAll('.filter[data-provider]').forEach(function (b) { b.classList.remove('active'); });
@@ -181,5 +284,6 @@
 
   $('elevenKey').value = keys().eleven;
   $('fishKey').value = keys().fish;
+  renderTakes();
   refreshVoices();
 })();

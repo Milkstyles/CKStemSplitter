@@ -59,3 +59,36 @@ test('Fish Audio account voices are loaded, labeled, paginated, and deduplicated
   assert.ok(requests.some((url) => url.includes('self=true')));
   assert.ok(requests.some((url) => url.includes('page_number=2')));
 });
+
+test('Fish Audio generation uses the supported s2-pro model header', async () => {
+  let request;
+  const context = {
+    URLSearchParams,
+    window: {},
+    fetch: async (url, options) => {
+      request = { url, options };
+      return {
+        ok: true,
+        arrayBuffer: async () => new Uint8Array([82, 73, 70, 70]).buffer
+      };
+    }
+  };
+
+  vm.createContext(context);
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'CKAIVoiceInsert', 'js', 'providers.js'),
+    'utf8'
+  );
+  vm.runInContext(source, context);
+
+  await context.window.CKProviders.generate(
+    { eleven: '', fish: 'test-key' },
+    { id: 'owned-voice', providerKey: 'fish' },
+    'Test line'
+  );
+
+  assert.equal(request.url, 'https://api.fish.audio/v1/tts');
+  assert.equal(request.options.headers.model, 's2-pro');
+  assert.equal(request.options.headers.Authorization, 'Bearer test-key');
+  assert.equal(JSON.parse(request.options.body).reference_id, 'owned-voice');
+});

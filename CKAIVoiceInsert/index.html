@@ -47,7 +47,16 @@
           <select id="outputFormat"><option value="wav">WAV</option></select>
         </label>
       </div>
-      <button id="generateInsert" class="primary">GENERATE & INSERT</button>
+      <button id="generateTake" class="primary">GENERATE NEW TAKE</button>
+
+      <div class="takesHeader">
+        <strong>GENERATED TAKES</strong>
+        <span>Preview as many as you need before inserting.</span>
+      </div>
+      <div id="takeList" class="takeList">
+        <div class="empty">No takes generated yet.</div>
+      </div>
+      <button id="approveTake" class="approve" disabled>APPROVE &amp; INSERT SELECTED TAKE</button>
       <div id="status" class="status">Ready</div>
     </section>
   </main>
