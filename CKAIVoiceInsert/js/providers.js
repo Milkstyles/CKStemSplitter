@@ -40,6 +40,11 @@
     return response.json();
   }
 
+  function fishAuthorization(apiKey) {
+    const token = String(apiKey || '').trim().replace(/^Bearer\s+/i, '').trim();
+    return 'Bearer ' + token;
+  }
+
   async function listElevenVoices(apiKey) {
     if (!apiKey) return [];
     let nextPageToken = null;
@@ -68,7 +73,7 @@
       });
       if (selfOnly) params.set('self', 'true');
       const data = await fetchJson('https://api.fish.audio/model?' + params.toString(), {
-        headers: { Authorization: 'Bearer ' + apiKey }
+        headers: { Authorization: fishAuthorization(apiKey) }
       });
       const items = data.items || data.models || data.data || data.results || [];
       if (!Array.isArray(items)) throw new Error('Fish Audio returned an invalid voice list.');
@@ -118,13 +123,19 @@
     const response = await fetch('https://api.fish.audio/v1/tts', {
       method: 'POST',
       headers: {
-        Authorization: 'Bearer ' + apiKey,
+        Authorization: fishAuthorization(apiKey),
         'Content-Type': 'application/json',
         model: 's2-pro'
       },
       body: JSON.stringify({ text: text, reference_id: voice.id, format: 'wav' })
     });
-    if (!response.ok) throw new Error('Fish Audio generation failed: ' + response.status + ' ' + await response.text());
+    if (!response.ok) {
+      const body = await response.text();
+      if (response.status === 401) {
+        throw new Error('Fish Audio rejected the API key. Create or copy an API key from fish.audio/app/api-keys, save it in the panel, and try again.');
+      }
+      throw new Error('Fish Audio generation failed: ' + response.status + ' ' + body);
+    }
     return { arrayBuffer: await response.arrayBuffer(), audioKind: 'wav' };
   }
 

@@ -103,7 +103,7 @@
       list.appendChild(row);
     });
 
-    if (!state.takes.length) list.innerHTML = '<div class="empty">No takes generated yet.</div>';
+    if (!state.takes.length) list.innerHTML = '<div class="empty">No takes generated yet. After a successful generation, an audio player appears here.</div>';
     $('approveTake').disabled = !selectedTake() || state.inserting;
   }
 

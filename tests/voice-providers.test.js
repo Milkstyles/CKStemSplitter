@@ -82,7 +82,7 @@ test('Fish Audio generation uses the supported s2-pro model header', async () =>
   vm.runInContext(source, context);
 
   await context.window.CKProviders.generate(
-    { eleven: '', fish: 'test-key' },
+    { eleven: '', fish: 'Bearer test-key' },
     { id: 'owned-voice', providerKey: 'fish' },
     'Test line'
   );
@@ -91,4 +91,32 @@ test('Fish Audio generation uses the supported s2-pro model header', async () =>
   assert.equal(request.options.headers.model, 's2-pro');
   assert.equal(request.options.headers.Authorization, 'Bearer test-key');
   assert.equal(JSON.parse(request.options.body).reference_id, 'owned-voice');
+});
+
+test('Fish Audio 401 responses explain how to replace the API key', async () => {
+  const context = {
+    URLSearchParams,
+    window: {},
+    fetch: async () => ({
+      ok: false,
+      status: 401,
+      text: async () => '{"message":"Invalid Token"}'
+    })
+  };
+
+  vm.createContext(context);
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'CKAIVoiceInsert', 'js', 'providers.js'),
+    'utf8'
+  );
+  vm.runInContext(source, context);
+
+  await assert.rejects(
+    context.window.CKProviders.generate(
+      { eleven: '', fish: 'invalid' },
+      { id: 'owned-voice', providerKey: 'fish' },
+      'Test line'
+    ),
+    /Fish Audio rejected the API key/
+  );
 });

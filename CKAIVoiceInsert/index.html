@@ -15,7 +15,10 @@
     <section class="card settings">
       <div class="row two">
         <label>ElevenLabs API Key<input id="elevenKey" type="password" autocomplete="off" /></label>
-        <label>Fish Audio API Key<input id="fishKey" type="password" autocomplete="off" /></label>
+        <label>Fish Audio API Key
+          <input id="fishKey" type="password" autocomplete="off" />
+          <span class="fieldHint">Use an API key from fish.audio/app/api-keys—not your password or a browser token.</span>
+        </label>
       </div>
       <button id="saveKeys" class="secondary">Save API Keys</button>
     </section>
@@ -54,7 +57,7 @@
         <span>Preview as many as you need before inserting.</span>
       </div>
       <div id="takeList" class="takeList">
-        <div class="empty">No takes generated yet.</div>
+        <div class="empty">No takes generated yet. After a successful generation, an audio player appears here.</div>
       </div>
       <button id="approveTake" class="approve" disabled>APPROVE &amp; INSERT SELECTED TAKE</button>
       <div id="status" class="status">Ready</div>
