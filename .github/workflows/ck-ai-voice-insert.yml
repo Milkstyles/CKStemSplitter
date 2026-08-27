@@ -1,0 +1,81 @@
+name: CK AI Voice Insert Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/ck-ai-voice-insert-bootstrap
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-2025
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build self-contained clipboard helper
+        shell: pwsh
+        run: |
+          dotnet publish CKAIVoiceInsert/helper/CKVoiceClipboard.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o build/clipboard
+
+          if (!(Test-Path build/clipboard/CKVoiceClipboard.exe)) {
+            throw "CKVoiceClipboard.exe was not produced."
+          }
+
+      - name: Stage CEP extension
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging/CKAIVoiceInsert | Out-Null
+          Copy-Item CKAIVoiceInsert/CSXS staging/CKAIVoiceInsert/CSXS -Recurse
+          Copy-Item CKAIVoiceInsert/css staging/CKAIVoiceInsert/css -Recurse
+          Copy-Item CKAIVoiceInsert/js staging/CKAIVoiceInsert/js -Recurse
+          Copy-Item CKAIVoiceInsert/jsx staging/CKAIVoiceInsert/jsx -Recurse
+          Copy-Item CKAIVoiceInsert/index.html staging/CKAIVoiceInsert/index.html
+          Copy-Item CKAIVoiceInsert/README.md staging/CKAIVoiceInsert/README.md
+          New-Item -ItemType Directory -Force -Path staging/CKAIVoiceInsert/bin | Out-Null
+          Copy-Item build/clipboard/CKVoiceClipboard.exe staging/CKAIVoiceInsert/bin/CKVoiceClipboard.exe
+
+      - name: Validate package
+        shell: pwsh
+        run: |
+          $required = @(
+            'staging/CKAIVoiceInsert/CSXS/manifest.xml',
+            'staging/CKAIVoiceInsert/index.html',
+            'staging/CKAIVoiceInsert/js/app.js',
+            'staging/CKAIVoiceInsert/js/providers.js',
+            'staging/CKAIVoiceInsert/jsx/host.jsx',
+            'staging/CKAIVoiceInsert/bin/CKVoiceClipboard.exe'
+          )
+          foreach ($file in $required) {
+            if (!(Test-Path $file)) { throw "Missing package file: $file" }
+          }
+
+      - name: Create extension ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path staging/CKAIVoiceInsert -DestinationPath CK-AI-Voice-Insert-Windows.zip -Force
+          Get-FileHash CK-AI-Voice-Insert-Windows.zip -Algorithm SHA256 | Format-List
+
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CK-AI-Voice-Insert-Windows
+          path: CK-AI-Voice-Insert-Windows.zip
+          retention-days: 14
+          if-no-files-found: error
