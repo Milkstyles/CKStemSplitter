@@ -120,6 +120,20 @@
     return filePath;
   }
 
+  function extensionRoot() {
+    const raw = window.__adobe_cep__.getSystemPath('extension');
+    return decodeURIComponent(String(raw).replace(/^file:\/\//i, '').replace(/^\/(\w:)/, '$1'));
+  }
+
+  function copyWaveToClipboard(filePath) {
+    const path = require('path');
+    const child = require('child_process');
+    const helper = path.join(extensionRoot(), 'bin', 'CKVoiceClipboard.exe');
+    const run = child.spawnSync(helper, ['copy', filePath], { windowsHide: true, encoding: 'utf8' });
+    if (run.error) throw run.error;
+    if (run.status !== 0) throw new Error((run.stderr || 'Audio clipboard helper failed').trim());
+  }
+
   async function generateAndInsert() {
     const voice = state.selectedVoice;
     const text = $('script').value.trim();
@@ -137,10 +151,12 @@
       const audio = await CKProviders.generate(keys(), voice, text);
       const filePath = writeGeneratedAudio(audio);
 
+      setStatus('Preparing generated audio for Audition...');
+      copyWaveToClipboard(filePath);
+
       setStatus('Inserting generated audio at ' + Number(context.startSeconds || 0).toFixed(3) + 's...');
-      const escaped = filePath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const mode = $('insertMode').value;
-      const insertRaw = await evalHost("CKVoiceInsert.insertGeneratedAudio('" + escaped + "','" + mode + "')");
+      const insertRaw = await evalHost("CKVoiceInsert.insertGeneratedAudio('', '" + mode + "', " + Number(context.startSamples || 0) + ")");
       let inserted;
       try { inserted = JSON.parse(insertRaw); } catch (_) { inserted = { ok: false, error: insertRaw }; }
       if (!inserted.ok) throw new Error(inserted.error || 'Audition insertion failed.');
