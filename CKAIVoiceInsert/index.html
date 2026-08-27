@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CK AI Voice Insert</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <main class="panel">
+    <header>
+      <div class="brand">CK AI VOICE INSERT</div>
+      <div class="sub">ElevenLabs + Fish Audio inside Adobe Audition</div>
+    </header>
+
+    <section class="card settings">
+      <div class="row two">
+        <label>ElevenLabs API Key<input id="elevenKey" type="password" autocomplete="off" /></label>
+        <label>Fish Audio API Key<input id="fishKey" type="password" autocomplete="off" /></label>
+      </div>
+      <button id="saveKeys" class="secondary">Save API Keys</button>
+    </section>
+
+    <section class="card">
+      <label class="searchLabel">VOICE SEARCH
+        <input id="voiceSearch" type="search" placeholder="Search name, provider, accent, style..." />
+      </label>
+      <div class="filters">
+        <button class="filter active" data-provider="all">All</button>
+        <button class="filter" data-provider="ElevenLabs">ElevenLabs</button>
+        <button class="filter" data-provider="Fish Audio">Fish Audio</button>
+        <button id="refreshVoices" class="filter refresh">Refresh</button>
+      </div>
+      <div id="voiceList" class="voiceList"></div>
+    </section>
+
+    <section class="card">
+      <div id="selectedVoice" class="selectedVoice">No voice selected</div>
+      <textarea id="script" rows="8" placeholder="Type the voice script here..."></textarea>
+      <div class="row two compact">
+        <label>Insert Mode
+          <select id="insertMode">
+            <option value="insert">Insert / Ripple</option>
+            <option value="overwrite">Overwrite</option>
+          </select>
+        </label>
+        <label>Output
+          <select id="outputFormat"><option value="wav">WAV</option></select>
+        </label>
+      </div>
+      <button id="generateInsert" class="primary">GENERATE & INSERT</button>
+      <div id="status" class="status">Ready</div>
+    </section>
+  </main>
+  <script src="js/providers.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
