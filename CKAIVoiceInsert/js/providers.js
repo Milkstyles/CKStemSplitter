@@ -12,14 +12,16 @@
     };
   }
 
-  function normalizeFishVoice(v) {
+  function normalizeFishVoice(v, owned) {
     return {
       id: v.id || v._id || v.reference_id,
       name: v.title || v.name || v.nickname || 'Unnamed voice',
       provider: 'Fish Audio',
       providerKey: 'fish',
+      owned: !!owned,
       description: v.description || v.text || '',
       labels: {
+        account: owned ? 'My voice' : '',
         language: v.language || '',
         gender: v.gender || '',
         author: (v.author && (v.author.nickname || v.author.name)) || ''
@@ -54,26 +56,49 @@
     return voices;
   }
 
+  async function listFishModelPages(apiKey, selfOnly) {
+    const models = [];
+    let pageNumber = 1;
+    let hasMore = false;
+    do {
+      const params = new URLSearchParams({
+        page_size: '100',
+        page_number: String(pageNumber),
+        sort_by: selfOnly ? 'created_at' : 'task_count'
+      });
+      if (selfOnly) params.set('self', 'true');
+      const data = await fetchJson('https://api.fish.audio/model?' + params.toString(), {
+        headers: { Authorization: 'Bearer ' + apiKey }
+      });
+      const items = data.items || data.models || data.data || data.results || [];
+      if (!Array.isArray(items)) throw new Error('Fish Audio returned an invalid voice list.');
+      items.forEach(function (v) { models.push(normalizeFishVoice(v, selfOnly)); });
+      hasMore = !!data.has_more;
+      pageNumber += 1;
+    } while (hasMore && pageNumber <= 20);
+    return models.filter(function (v) { return !!v.id; });
+  }
+
   async function listFishVoices(apiKey) {
     if (!apiKey) return [];
-    // Fish Audio's public model/voice listing has changed over time. Try the current model endpoint first,
-    // then gracefully fall back so the UI remains usable if Fish adjusts pagination/shape again.
-    const candidateUrls = [
-      'https://api.fish.audio/model?page_size=100&sort_by=task_count',
-      'https://api.fish.audio/v1/model?page_size=100'
-    ];
-    let lastError = null;
-    for (const url of candidateUrls) {
-      try {
-        const data = await fetchJson(url, { headers: { Authorization: 'Bearer ' + apiKey } });
-        const items = data.items || data.models || data.data || data.results || [];
-        if (Array.isArray(items)) return items.map(normalizeFishVoice).filter(function (v) { return !!v.id; });
-      } catch (err) {
-        lastError = err;
-      }
+
+    // Fish requires self=true to include private/unlisted models created by the
+    // authenticated account. Load those first so they win duplicate IDs.
+    const owned = await listFishModelPages(apiKey, true);
+    let publicVoices = [];
+    try {
+      publicVoices = await listFishModelPages(apiKey, false);
+    } catch (_) {
+      // Account voices are the essential result; keep them usable even if the
+      // public discovery catalog is temporarily unavailable.
     }
-    if (lastError) throw lastError;
-    return [];
+
+    const seen = {};
+    return owned.concat(publicVoices).filter(function (voice) {
+      if (seen[voice.id]) return false;
+      seen[voice.id] = true;
+      return true;
+    });
   }
 
   async function generateEleven(apiKey, voice, text) {
@@ -112,7 +137,10 @@
       const voices = [];
       results.forEach(function (r) { if (r.status === 'fulfilled') voices.push.apply(voices, r.value); });
       const errors = results.filter(function (r) { return r.status === 'rejected'; }).map(function (r) { return r.reason.message; });
-      voices.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      voices.sort(function (a, b) {
+        if (!!a.owned !== !!b.owned) return a.owned ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
       return { voices: voices, errors: errors };
     },
     generate: function (keys, voice, text) {
