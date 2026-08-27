@@ -232,7 +232,9 @@
       run.stdin.end(JSON.stringify({
         apiKey: apiKey,
         text: text,
-        model: 's2.1-pro'
+        // Fish Audio's current OpenAPI specifies this model for the free
+        // developer tier. Paid model selection can be exposed separately.
+        model: 's2.1-pro-free'
       }));
     });
   }

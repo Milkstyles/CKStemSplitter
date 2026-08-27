@@ -101,9 +101,24 @@ internal static class Program
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("CK-AI-Voice-Insert/0.1.0");
 
+        using (var creditRequest = new HttpRequestMessage(HttpMethod.Get, "https://api.fish.audio/wallet/self/api-credit"))
+        {
+            creditRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var creditResponse = await client.SendAsync(creditRequest);
+            if (!creditResponse.IsSuccessStatusCode)
+            {
+                var creditMessage = await creditResponse.Content.ReadAsStringAsync();
+                Console.Error.WriteLine(
+                    $"Fish Audio API-key check failed: {(int)creditResponse.StatusCode} {creditResponse.ReasonPhrase}: {creditMessage} " +
+                    "Create a Fish API key at https://fish.audio/app/api-keys/; a Fish website login/session token cannot generate audio."
+                );
+                return 12;
+            }
+        }
+
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.fish.audio/v1/tts");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Add("model", string.IsNullOrWhiteSpace(requestInput.Model) ? "s2.1-pro" : requestInput.Model);
+        request.Headers.Add("model", string.IsNullOrWhiteSpace(requestInput.Model) ? "s2.1-pro-free" : requestInput.Model);
         request.Content = new StringContent(
             JsonSerializer.Serialize(new
             {
@@ -121,13 +136,13 @@ internal static class Program
         {
             var message = Encoding.UTF8.GetString(responseBytes);
             Console.Error.WriteLine($"Fish Audio TTS failed: {(int)response.StatusCode} {response.ReasonPhrase}: {message}");
-            return 12;
+            return 13;
         }
 
         if (!IsWave(responseBytes))
         {
             Console.Error.WriteLine("Fish Audio returned data that was not a RIFF/WAVE file.");
-            return 13;
+            return 14;
         }
 
         var fullOutputPath = Path.GetFullPath(outputPath);

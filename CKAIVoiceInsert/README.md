@@ -37,6 +37,8 @@ ElevenLabs:
 
 Fish Audio:
 - `POST https://api.fish.audio/v1/tts`
+- Uses Fish Audio's documented `s2.1-pro-free` model header for free developer API keys.
+- Verifies TTS/billing API access with `GET /wallet/self/api-credit` before generation so an account/session token cannot be mistaken for a TTS API key.
 - Fish voices/models are normalized to `{id,name,provider:'Fish Audio',...}` before display.
 
 ## Security
