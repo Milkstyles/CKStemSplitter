@@ -17,6 +17,7 @@ Adobe Audition CEP extension for generating AI speech from ElevenLabs and Fish A
 - `index.html`, `css/app.css`, `js/app.js` — panel UI.
 - `js/providers.js` — ElevenLabs and Fish Audio REST clients + normalized unified voice model.
 - `jsx/host.jsx` — ExtendScript bridge to Audition. Reads WaveDocument context and owns insertion operations.
+- `helper/` — Windows audio-clipboard helper used to hand the generated WAV to Audition for insertion.
 
 ## API endpoints
 
@@ -34,4 +35,6 @@ API keys are never committed. The bootstrap UI stores them only in the local CEP
 
 ## Current host integration status
 
-The Audition panel/voice-generation layer is implemented first. `host.jsx` reads Waveform playhead/selection context using the supported Audition ExtendScript object model. The insertion command layer is isolated so we can validate the exact Audition command/API for inserting a generated WAV while preserving full generated duration.
+The Audition panel, unified voice-generation layer, playhead/selection-start bridge, and Windows audio-clipboard insertion helper are implemented for the first Windows test build.
+
+Build trigger: first packaged Windows test build.
