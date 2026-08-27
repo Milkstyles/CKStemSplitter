@@ -27,7 +27,7 @@ This first test build is unsigned. The installer places the extension in the cur
 - `index.html`, `css/app.css`, `js/app.js` — panel UI.
 - `js/providers.js` — ElevenLabs and Fish Audio REST clients + normalized unified voice model.
 - `jsx/host.jsx` — ExtendScript bridge to Audition. Reads WaveDocument context and owns insertion operations.
-- `helper/` — Windows audio-clipboard helper used to hand the generated WAV to Audition for insertion.
+- `helper/` — Windows helper that performs Fish Audio TTS outside the embedded browser, writes the generated WAV, and hands approved audio to Audition through the Windows audio clipboard.
 
 ## API endpoints
 

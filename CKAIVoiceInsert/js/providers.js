@@ -119,26 +119,6 @@
     return { arrayBuffer: await response.arrayBuffer(), audioKind: 'pcm16', sampleRate: 44100, channels: 1 };
   }
 
-  async function generateFish(apiKey, voice, text) {
-    const response = await fetch('https://api.fish.audio/v1/tts', {
-      method: 'POST',
-      headers: {
-        Authorization: fishAuthorization(apiKey),
-        'Content-Type': 'application/json',
-        model: 's2-pro'
-      },
-      body: JSON.stringify({ text: text, reference_id: voice.id, format: 'wav' })
-    });
-    if (!response.ok) {
-      const body = await response.text();
-      if (response.status === 401) {
-        throw new Error('Fish Audio rejected the API key. Create or copy an API key from fish.audio/app/api-keys, save it in the panel, and try again.');
-      }
-      throw new Error('Fish Audio generation failed: ' + response.status + ' ' + body);
-    }
-    return { arrayBuffer: await response.arrayBuffer(), audioKind: 'wav' };
-  }
-
   global.CKProviders = {
     listAllVoices: async function (keys) {
       const results = await Promise.allSettled([
@@ -156,7 +136,7 @@
     },
     generate: function (keys, voice, text) {
       if (voice.providerKey === 'eleven') return generateEleven(keys.eleven, voice, text);
-      if (voice.providerKey === 'fish') return generateFish(keys.fish, voice, text);
+      if (voice.providerKey === 'fish') throw new Error('Fish Audio generation requires the Windows helper.');
       throw new Error('Unknown voice provider');
     }
   };

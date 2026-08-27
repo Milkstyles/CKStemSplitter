@@ -164,17 +164,22 @@
 
   function writeGeneratedAudio(result) {
     const fs = require('fs');
-    const os = require('os');
-    const path = require('path');
-    const dir = path.join(os.tmpdir(), 'Commercial Kings', 'CK AI Voice Insert');
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, 'ck-ai-voice-' + Date.now() + '.wav');
+    const filePath = newGeneratedAudioPath();
     if (result.audioKind === 'pcm16') {
       writeWaveFromPCM16(filePath, result.arrayBuffer, result.sampleRate || 44100, result.channels || 1);
     } else {
       fs.writeFileSync(filePath, Buffer.from(result.arrayBuffer));
     }
     return filePath;
+  }
+
+  function newGeneratedAudioPath() {
+    const fs = require('fs');
+    const os = require('os');
+    const path = require('path');
+    const dir = path.join(os.tmpdir(), 'Commercial Kings', 'CK AI Voice Insert');
+    fs.mkdirSync(dir, { recursive: true });
+    return path.join(dir, 'ck-ai-voice-' + Date.now() + '-' + Math.floor(Math.random() * 100000) + '.wav');
   }
 
   function previewUrlForFile(filePath) {
@@ -196,6 +201,42 @@
     if (run.status !== 0) throw new Error((run.stderr || 'Audio clipboard helper failed').trim());
   }
 
+  function generateFishWithHelper(apiKey, voice, text) {
+    const fs = require('fs');
+    const path = require('path');
+    const child = require('child_process');
+    const helper = path.join(extensionRoot(), 'bin', 'CKVoiceClipboard.exe');
+    const filePath = newGeneratedAudioPath();
+
+    return new Promise(function (resolve, reject) {
+      const run = child.spawn(helper, ['fish-tts', voice.id, filePath], {
+        windowsHide: true,
+        stdio: ['pipe', 'ignore', 'pipe']
+      });
+      let stderr = '';
+
+      run.stderr.on('data', function (chunk) { stderr += chunk.toString(); });
+      run.on('error', reject);
+      run.on('close', function (code) {
+        if (code !== 0) {
+          reject(new Error((stderr || 'Fish Audio Windows helper failed with code ' + code + '.').trim()));
+          return;
+        }
+        if (!fs.existsSync(filePath)) {
+          reject(new Error('Fish Audio completed without producing a WAV file.'));
+          return;
+        }
+        resolve(filePath);
+      });
+
+      run.stdin.end(JSON.stringify({
+        apiKey: apiKey,
+        text: text,
+        model: 's2.1-pro'
+      }));
+    });
+  }
+
   async function generateTake() {
     const voice = state.selectedVoice;
     const text = $('script').value.trim();
@@ -209,8 +250,13 @@
       $('generateTake').disabled = true;
       $('generateTake').textContent = 'GENERATING TAKE ' + takeNumber + '...';
       setStatus('Generating take ' + takeNumber + ' with ' + voice.name + ' from ' + voice.provider + '...');
-      const audio = await CKProviders.generate(keys(), voice, text);
-      const filePath = writeGeneratedAudio(audio);
+      let filePath;
+      if (voice.providerKey === 'fish') {
+        filePath = await generateFishWithHelper(keys().fish, voice, text);
+      } else {
+        const audio = await CKProviders.generate(keys(), voice, text);
+        filePath = writeGeneratedAudio(audio);
+      }
       const take = {
         id: 'take-' + Date.now() + '-' + takeNumber,
         number: takeNumber,
