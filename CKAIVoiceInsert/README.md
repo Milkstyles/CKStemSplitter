@@ -2,6 +2,15 @@
 
 Adobe Audition CEP extension for generating AI speech from ElevenLabs and Fish Audio and inserting the full generated result at the current Waveform playhead / selection start.
 
+## Windows installation
+
+1. Close Adobe Audition.
+2. Run `CK-AI-Voice-Insert-Setup.exe`.
+3. Complete the installer and restart Adobe Audition.
+4. Open **Window > Extensions > CK AI Voice Insert**.
+
+This first test build is unsigned. The installer places the extension in the current user's Adobe CEP extensions folder and enables CEP test mode for the supported runtime versions. Windows may show an Unknown Publisher warning until the production installer is code-signed.
+
 ## Target workflow
 
 1. Put the Audition playhead at the insertion point or highlight a range.
